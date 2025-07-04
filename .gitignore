@@ -26,3 +26,8 @@ venv
 /uniformity/stackoverflowquestion.tex.blg
 script.log
 texput.log
+
+
+# Added by cargo
+
+/target
