@@ -3,7 +3,7 @@ name = "videos"
 version = "0.1.0"
 description = ""
 authors = [
-    {name = "PlayfulMathematician"}
+    {name = "PlayfulMathematician", email = "me@playfulmathematician.com"}
 ]
 readme = "README.md"
 requires-python = ">=3.13,<4.0"
