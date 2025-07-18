@@ -16,13 +16,12 @@ polyhedra.py - A program that includes many classes relating to polyhedra render
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
 '''
 
-import manim
 from typing import Optional
 from math import sqrt
 from exceptions import NormalizationError
 
 
-class P_Vector:
+class pVector:
     def __init__(
         self, 
         x: Optional[float] = None, 
@@ -54,17 +53,33 @@ class P_Vector:
     def magnitude(self) -> float:
         return sqrt(self.x ** 2 + self.y ** 2 + self.z ** 2)
     
-    def __mul__(self, scalar: float) -> "P_Vector":
-        return P_Vector(self.x * scalar, self.y * scalar, self.z * scalar)
+    def __mul__(self, scalar: float) -> "pVector":
+        return pVector(self.x * scalar, self.y * scalar, self.z * scalar)
 
-    def __add__(self, vector: "P_Vector") -> "P_Vector":
-        return P_Vector(self.x + vector.x, self.y + vector.y, self.z + vector.z)
+    def __add__(self, vector: "pVector") -> "pVector":
+        return pVector(self.x + vector.x, self.y + vector.y, self.z + vector.z)
     
-    def __neg__(self) -> "P_Vector":
-        return P_Vector(-self.x, -self.y, -self.z)
+    def __neg__(self) -> "pVector":
+        return pVector(-self.x, -self.y, -self.z)
 
-    def __sub__(self, vector: "P_Vector"):
+    def __sub__(self, vector: "pVector") -> "pVector":
         return self + (-vector)
+    
+    def __truediv__(self, scalar: float) -> "pVector":
+        if scalar == 0:
+            raise ZeroDivisionError("You cannot divide a vector by zero")
+        return self * (1 / scalar)
+
+    def normalize(self) -> "pVector":
+        if self.magnitude == 0:
+            raise NormalizationError
+        return self / self.magnitude
+    
+    def __rmul__(self, scalar: float) -> "pVector":
+        return self * scalar
+    
+    def __eq__(self, other: "pVector") -> bool:
+        return (self - other).magnitude == 0
 
 
     

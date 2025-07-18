@@ -16,7 +16,7 @@ exceptions.py - This program includes all the exceptions I will throw.
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
 '''
 
-class NormalizationError(ValueError):
+class NormalizationError(ZeroDivisionError):
     def __init__(self, message = "You cannot normalize the zero vector."):
         self.message = message
         super().__init__(self.message)
