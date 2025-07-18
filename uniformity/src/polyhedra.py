@@ -33,15 +33,19 @@ class pVector:
         object.__setattr__(self, '_x', x if x is not None else 0)
         object.__setattr__(self, '_y', y if y is not None else 0)
         object.__setattr__(self, '_z', z if z is not None else 0)
+        
     @property
     def x(self):
         return self._x
+    
     @property
     def y(self):
         return self._y
+    
     @property
     def z(self):
         return self._z
+    
     def __getitem__(self, index: int) -> float:
         match index:
             case 0:
