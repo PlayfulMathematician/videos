@@ -86,7 +86,7 @@ class pVector:
 
     def normalize(self) -> "pVector":
         if self.magnitude == 0:
-            raise NormalizationError
+            raise NormalizationError()
         return self / self.magnitude
     
     def __rmul__(self, scalar: float) -> "pVector":
