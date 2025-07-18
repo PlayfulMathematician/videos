@@ -18,20 +18,30 @@ polyhedra.py - A program that includes many classes relating to polyhedra render
 
 from typing import Optional
 from math import sqrt
-from exceptions import NormalizationError
+from .exceptions import NormalizationError
 
 
 class pVector:
+    __slots__ = ('_x', '_y', '_z')
+
     def __init__(
         self, 
         x: Optional[float] = None, 
         y: Optional[float] = None, 
         z: Optional[float] = None
     ) -> None:
-        self.x = x if x is not None else 0
-        self.y = y if y is not None else 0
-        self.z = z if z is not None else 0
-
+        object.__setattr__(self, '_x', x if x is not None else 0)
+        object.__setattr__(self, '_y', y if y is not None else 0)
+        object.__setattr__(self, '_z', z if z is not None else 0)
+    @property
+    def x(self):
+        return self._x
+    @property
+    def y(self):
+        return self._y
+    @property
+    def z(self):
+        return self._z
     def __getitem__(self, index: int) -> float:
         match index:
             case 0:
@@ -44,7 +54,7 @@ class pVector:
                 raise IndexError("point index out of range")
 
     def __repr__(self) -> str:
-        return f"P_Vector({self.x}, {self.y}, {self.z})"
+        return f"pVector({self.x}, {self.y}, {self.z})"
 
     def __str__(self) -> str:
         return f"({self.x}, {self.y}, {self.z})"
@@ -80,7 +90,9 @@ class pVector:
     
     def __eq__(self, other: "pVector") -> bool:
         return (self - other).magnitude == 0
-
+    
+    def __setattr__(self, *_, **__):
+        raise AttributeError("no i don't want to")
 
     
 
