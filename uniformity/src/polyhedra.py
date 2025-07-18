@@ -97,3 +97,7 @@ class pVector:
     
     def __setattr__(self, *_, **__):
         raise AttributeError("no i don't want to")
+
+    def dot_product(self, other: "pVector") -> float:
+        return self.x * other.x + self.y * other.y + self.z * other.z
+
