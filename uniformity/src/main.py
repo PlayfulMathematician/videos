@@ -149,4 +149,40 @@ class pVector:
     def __hash__(self) -> int:
         return hash((self.x, self.y, self.z))
     
+class pLine:
+    __slots__ = ('_point', '_direction')
     
+    def __init__(self, point: pVector, direction: pVector) -> None:
+        object.__setattr__(self, '_point', point)
+        object.__setattr__(self, '_direction', direction.normalize())
+    
+    @property
+    def point(self) -> pVector:
+        return self._point
+    
+    @property
+    def direction(self) -> pVector:
+        return self._direction
+    
+    def __repr__(self) -> str:
+        return f"pLine(point={self.point}, direction={self.direction})"
+    
+class pLineSegment(pLine):
+    __slots__ = ('_start', '_end')
+    
+    def __init__(self, start: pVector, end: pVector) -> None:
+        super().__init__(start, end - start)
+        object.__setattr__(self, '_start', start)
+        object.__setattr__(self, '_end', end)
+    
+    @property
+    def start(self) -> pVector:
+        return self._start
+    
+    @property
+    def end(self) -> pVector:
+        return self._end
+    
+    def __repr__(self) -> str:
+        return f"pLineSegment(start={self.start}, end={self.end})"
+
