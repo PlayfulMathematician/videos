@@ -21,7 +21,6 @@ main.py - A program that does all rendering and class initialization
 
 from typing import Optional
 from math import sqrt
-
 # ────────────────────────────────
 # METADATA
 # ────────────────────────────────
@@ -138,3 +137,16 @@ class pVector:
 
     def cross_product(self, other: "pVector") -> "pVector":
         return pVector(self.y * other.z - self.z * other.y, self.z * other.x - self.x * other.z, self.x * other.y - self.y * other.x)
+    
+    def __len__(self) -> int:
+        return 3
+    
+    def __iter__(self):
+        yield self.x
+        yield self.y
+        yield self.z
+    
+    def __hash__(self) -> int:
+        return hash((self.x, self.y, self.z))
+    
+    
