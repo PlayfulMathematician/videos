@@ -167,22 +167,22 @@ class pLine:
     def __repr__(self) -> str:
         return f"pLine(point={self.point}, direction={self.direction})"
     
-class pLineSegment(pLine):
-    __slots__ = ('_start', '_end')
+    def pointIntersect(self, other: "pVector") -> bool:
+        vector_to_point = other - self.point
+        return vector_to_point.dot_product(self.direction) == 0
     
-    def __init__(self, start: pVector, end: pVector) -> None:
-        super().__init__(start, end - start)
-        object.__setattr__(self, '_start', start)
-        object.__setattr__(self, '_end', end)
-    
-    @property
-    def start(self) -> pVector:
-        return self._start
-    
-    @property
-    def end(self) -> pVector:
-        return self._end
-    
-    def __repr__(self) -> str:
-        return f"pLineSegment(start={self.start}, end={self.end})"
+    def lineIntersect(self, other: "pLine") -> Optional[pVector]:
+        denom = self.direction.cross_product(other.direction)
+        if denom.magnitude == 0:
+            return None
+        vector_to_other = other.point - self.point
+        t = vector_to_other.cross_product(other.direction).dot_product(denom) / (denom.magnitude ** 2)
+        return self.point + self.direction * t # this hopefully works 
 
+    def __eq__(self, other: "pLine") -> bool:
+        return self.pointIntersect(other.point) and self.direction.dot_product(other.direction) == 1
+
+    
+
+    
+        
