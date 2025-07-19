@@ -1,5 +1,5 @@
 '''
-polyhedra.py - A program that includes many classes relating to polyhedra rendering in manim
+main.py - A program that does all rendering and class initialization
     Copyright (C) 2025 PlayfulMathematician
 
     This program is free software: you can redistribute it and/or modify
@@ -15,15 +15,47 @@ polyhedra.py - A program that includes many classes relating to polyhedra render
     You should have received a copy of the GNU General Public License
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
 '''
+# ────────────────────────────────
+# IMPORTS
+# ────────────────────────────────
 
 from typing import Optional
 from math import sqrt
-from .exceptions import NormalizationError
 
+# ────────────────────────────────
+# METADATA
+# ────────────────────────────────
+
+__version__ = "0.1.0"
+__author__ = "PlayfulMathematician"
+__license__ = "GPL-3.0"
+__all__ = [
+    "pVector",
+    "NormalizationError"
+]
+__email__ = "me@playfulmathematician.com"
+
+# ────────────────────────────────
+# CONSTANTS
+# ────────────────────────────────
+
+
+
+# ────────────────────────────────
+# EXCEPTIONS
+# ────────────────────────────────
+
+class NormalizationError(ZeroDivisionError):
+    def __init__(self, message = "You cannot normalize the zero vector."):
+        self.message = message
+        super().__init__(self.message)
+
+# ────────────────────────────────
+# CLASSES
+# ────────────────────────────────
 
 class pVector:
     __slots__ = ('_x', '_y', '_z')
-
     def __init__(
         self, 
         x: Optional[float] = None, 
@@ -92,8 +124,11 @@ class pVector:
     def __rmul__(self, scalar: float) -> "pVector":
         return self * scalar
     
+    def dist(self, other: "pVector") -> float:
+        return (self - other).magnitude
+    
     def __eq__(self, other: "pVector") -> bool:
-        return (self - other).magnitude == 0
+        return self.dist(other) == 0
     
     def __setattr__(self, *_, **__):
         raise AttributeError("no i don't want to")
@@ -101,3 +136,5 @@ class pVector:
     def dot_product(self, other: "pVector") -> float:
         return self.x * other.x + self.y * other.y + self.z * other.z
 
+    def cross_product(self, other: "pVector") -> "pVector":
+        return pVector(self.y * other.z - self.z * other.y, self.z * other.x - self.x * other.z, self.x * other.y - self.y * other.x)
