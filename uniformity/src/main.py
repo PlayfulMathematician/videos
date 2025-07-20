@@ -145,7 +145,8 @@ class pVector:
         yield self.x
         yield self.y
         yield self.z
-    
+        return
+        
     def __hash__(self) -> int:
         return hash((self.x, self.y, self.z))
     
@@ -159,12 +160,15 @@ class pSegment:
     @property
     def a(self) -> pVector:
         return self._a
+    
     @property
     def b(self) -> pVector:
         return self._b
+    
     @property
     def length(self) -> float:
         return self.a.dist(self.b)
+    
     def intersectWithPoint(self, other: "pVector") -> bool:
         raise NotImplementedError("This method is not implemented yet.") 
 
