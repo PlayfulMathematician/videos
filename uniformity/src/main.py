@@ -149,40 +149,25 @@ class pVector:
     def __hash__(self) -> int:
         return hash((self.x, self.y, self.z))
     
-class pLine:
-    __slots__ = ('_point', '_direction')
+class pSegment:
+    __slots__ = ('_a', '_b')
     
-    def __init__(self, point: pVector, direction: pVector) -> None:
-        object.__setattr__(self, '_point', point)
-        object.__setattr__(self, '_direction', direction.normalize())
-    
-    @property
-    def point(self) -> pVector:
-        return self._point
+    def __init__(self, a: pVector, b: pVector) -> None:
+        object.__setattr__(self, '_a', a)
+        object.__setattr__(self, '_b', b)
     
     @property
-    def direction(self) -> pVector:
-        return self._direction
-    
-    def __repr__(self) -> str:
-        return f"pLine(point={self.point}, direction={self.direction})"
-    
-    def pointIntersect(self, other: "pVector") -> bool:
-        vector_to_point = other - self.point
-        return vector_to_point.dot_product(self.direction) == 0
-    
-    def lineIntersect(self, other: "pLine") -> Optional[pVector]:
-        denom = self.direction.cross_product(other.direction)
-        if denom.magnitude == 0:
-            return None
-        vector_to_other = other.point - self.point
-        t = vector_to_other.cross_product(other.direction).dot_product(denom) / (denom.magnitude ** 2)
-        return self.point + self.direction * t # this hopefully works 
+    def a(self) -> pVector:
+        return self._a
+    @property
+    def b(self) -> pVector:
+        return self._b
+    @property
+    def length(self) -> float:
+        return self.a.dist(self.b)
+    def intersectWithPoint(self, other: "pVector") -> bool:
+        raise NotImplementedError("This method is not implemented yet.") 
 
-    def __eq__(self, other: "pLine") -> bool:
-        return self.pointIntersect(other.point) and self.direction.dot_product(other.direction) == 1
-
-    
-
-    
+    def intersectWithSegment(self, other: "pSegment") -> Optional[pVector]:
+        raise NotImplementedError("This method is not implemented yet.")
         
