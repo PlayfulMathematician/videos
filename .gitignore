@@ -13,3 +13,5 @@ Thumbs.db
 uniformity/unity/Recordings/
 .vscode
 media
+*.exe
+uniformity/src/models/a.exe
