@@ -160,4 +160,5 @@ class TexExample(Scene):
         tex.scale(2)
         # Add to the scene
         self.play(Write(tex))
+        self.play(Unwrite(tex))
         self.wait(1)
