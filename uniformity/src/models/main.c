@@ -1,9 +1,26 @@
+/*
+main.c - A program that does off parsing and rendering and stuff
+    Copyright (C) 2025 PlayfulMathematician
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <https://www.gnu.org/licenses/>.
+*/
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
 #include <stdint.h>
-
+#define EPSILON 0.0001
 typedef struct 
 {
     float x, y, z;
@@ -19,6 +36,169 @@ typedef struct
     int* face_sizes;
 } 
 Polyhedron;
+
+typedef struct 
+{
+    Vec3* vertices;
+    int** edges;
+    int vertex_count;
+    int edge_count;
+} PSLG;
+
+Vec3 subtract_vec3(Vec3 a, Vec3 b)
+{
+    Vec3 result;
+    result.x = a.x - b.x;
+    result.y = a.y - b.y;
+    result.z = a.z - b.z;
+    return result;
+}
+
+Vec3 add_vec3(Vec3 a, Vec3 b)
+{
+    Vec3 result;
+    result.x = a.x + b.x;
+    result.y = a.y + b.y;
+    result.z = a.z + b.z;
+    return result;
+}
+
+Vec3 multiply_vec3(Vec3 a, float scalar)
+{
+    Vec3 result;
+    result.x = a.x * scalar;
+    result.y = a.y * scalar;
+    result.z = a.z * scalar;
+    return result;
+}
+
+PSLG generate_plsg(Vec3* vertices, int vertex_count)
+{
+    PSLG new;
+    new.vertex_count = vertex_count;
+    new.edge_count = vertex_count;
+    new.vertices = malloc(vertex_count * sizeof(Vec3));
+    if (!new.vertices) 
+    {
+        new.vertex_count = 0;
+        new.edge_count = 0;
+        new.edges = NULL;
+        return new;
+    }
+    for (int i = 0; i < vertex_count; i++)
+    {
+        new.vertices[i] = vertices[i];
+    }
+
+    new.edges = malloc(new.edge_count * sizeof(int*));
+    if (!new.edges) 
+    {
+        free(new.vertices);
+        new.vertex_count = 0;
+        new.edge_count = 0;
+        return new;
+    }
+
+    for (int i = 0; i < vertex_count; i++)
+    {
+        new.edges[i] = malloc(2 * sizeof(int));
+        if (!new.edges[i]) 
+        {
+            for (int j = 0; j < i; j++) 
+            {
+                free(new.edges[j]);
+            }
+            free(new.edges);
+            free(new.vertices);
+            new.vertex_count = 0;
+            new.edge_count = 0;
+            new.edges = NULL;
+            new.vertices = NULL;
+            return new;
+        }
+        new.edges[i][0] = i;
+        new.edges[i][1] = (i + 1) % vertex_count; 
+    }
+
+    return new;
+}
+
+int intersecting_segments(Vec3 a, Vec3 b, Vec3 c, Vec3 d, Vec3* out)
+{
+    
+    if (a.x == b.x && a.y == b.y && c.x == d.x && c.y == d.y)
+    {
+        return 0;
+    }
+    float tx; 
+    float ty;
+    int vertical = 0;
+    if (a.x == b.x && a.y == b.y)
+    {
+        tx = (a.x - c.x) / (d.x - c.x);
+        ty = (a.y - c.y) / (d.y - c.y);
+        vertical = 1;
+    }
+    if (c.x == d.x && c.y == d.y)
+    {
+        tx = (c.x - a.x) / (b.x - a.x);
+        ty = (c.y - a.y) / (b.y - a.y);
+        vertical = 2;
+    }
+    if (vertical > 0)
+    {
+        if (tx < 0 || tx > 1)
+        {
+            return 0;
+        }
+        if (ty < 0 || ty > 1)
+        {
+            return 0;
+        }
+        float t_avg;
+        if (fabs(tx - ty) < EPSILON)
+        {
+            t_avg = (tx + ty) / 2;
+        }
+        else
+        {
+            return 0;
+        }
+        if (vertical == 1)
+        {
+            *out = add_vec3(c, multiply_vec3(subtract_vec3(d, c), t_avg));
+        }
+        else if (vertical == 2)
+        {
+            *out = add_vec3(a, multiply_vec3(subtract_vec3(b, a), t_avg));
+        }
+        return 1;
+    }
+    float denom = (a.x - b.x)*(c.y - d.y) - (a.y - b.y)*(c.x - d.x);
+
+    if (fabs(denom) < EPSILON)
+    {
+        return 0;
+    }
+    float t = ((a.x - c.x)*(c.y - d.y) - (a.y - c.y)*(c.x-d.x)) / denom;
+    float u = -((a.x - b.x)*(a.y - c.y) - (a.y - b.y)*(a.x-c.x)) / denom;
+    if (t < 0 || t > 1)
+    {
+        return 0;
+    }
+    if (u < 0 || u > 1)
+    {
+        return 0;
+    }
+    Vec3 v1 = add_vec3(a, multiply_vec3(subtract_vec3(b, a), t));
+    Vec3 v2 = add_vec3(c, multiply_vec3(subtract_vec3(d, c), u));
+    if (fabs(v1.z - v2.z) < EPSILON)
+    {
+        *out = multiply_vec3(add_vec3(v1, v2), 0.5f);
+        return 1;
+    }
+    return 0;
+}
 
 void print_vertex(Vec3 v)
 {
@@ -44,6 +224,7 @@ void print_polyhedron(Polyhedron* poly)
         }
     }
 }
+
 Polyhedron* create_polyhedron(int nv, int nf) 
 {
     Polyhedron* poly = malloc(sizeof(Polyhedron));
@@ -53,6 +234,18 @@ Polyhedron* create_polyhedron(int nv, int nf)
     poly->faces = malloc(nf * sizeof(int*));
     poly->face_sizes = malloc(nf * sizeof(int));
     return poly;
+}
+
+void free_polyhedron(Polyhedron* poly)
+{
+    for(int i = 0; i < poly->face_count; i++)
+    {
+        free(poly->faces[i]);
+    }
+    free(poly->face_sizes);
+    free(poly->faces);
+    free(poly->vertices);
+    free(poly);
 }
 
 int read_off_header (FILE *fin, int *nv, int *nf)
@@ -83,6 +276,7 @@ int read_off_header (FILE *fin, int *nv, int *nf)
     }
     return 1;
 }
+
 int read_vertex (FILE *fin, Polyhedron *poly, int vertex_idx)
 {
     char line[256];
@@ -154,6 +348,7 @@ int read_face (FILE *fin, Polyhedron *poly, int face_index)
     return 1;
 
 }
+
 int read_faces(FILE *fin, Polyhedron* poly)
 {
     for (int i = 0; i < poly->face_count; i++)
@@ -165,6 +360,7 @@ int read_faces(FILE *fin, Polyhedron* poly)
     }
     return 1;
 }
+
 int read_vertices (FILE *fin, Polyhedron* poly) 
 {
     for (int i = 0; i < poly->vertex_count; i++) 
@@ -208,12 +404,17 @@ int main (int argc, char *argv[])
     }
     print_polyhedron(poly);
     fclose(fin);
+    free_polyhedron(poly);
     return 0;
     error:
         fprintf(stderr, "Error");
         if (fin)
         {
             fclose(fin);
+        }
+        if (poly)
+        {
+            free_polyhedron(poly);
         }
         return 1;
 }
