@@ -92,6 +92,7 @@ int add_triangle(Triangulation* tri, Vec3 a, Vec3 b, Vec3 c)
     tri->triangles[tri->triangle_count][0] = a;
     tri->triangles[tri->triangle_count][1] = b;
     tri->triangles[tri->triangle_count][2] = c;
+    tri->triangle_count++;
     return SUCCESS;
 }
 
@@ -347,7 +348,7 @@ int free_pslg(PSLG* pslg)
 
 PSLGTriangulation* create_pslg_triangulation(PSLG* pslg)
 {
-    PSLGTriangulation* pslgtri;
+    PSLGTriangulation* pslgtri = malloc(sizeof(PSLGTriangulation));
     pslgtri->triangulation = empty_triangulation();
     pslgtri->pslg = pslg;
     return pslgtri;
