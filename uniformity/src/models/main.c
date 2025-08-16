@@ -21,6 +21,9 @@ main.c - A program that does off parsing and rendering and stuff
 #include <math.h>
 #include <stdint.h>
 #define EPSILON 0.0001
+#define FAILURE 0 
+#define SUCCESS 1
+#define NOOP 2
 typedef struct 
 {
     float x, y, z;
@@ -45,14 +48,7 @@ typedef struct
     int edge_count;
 } PSLG;
 
-Vec3 subtract_vec3(Vec3 a, Vec3 b)
-{
-    Vec3 result;
-    result.x = a.x - b.x;
-    result.y = a.y - b.y;
-    result.z = a.z - b.z;
-    return result;
-}
+
 
 Vec3 add_vec3(Vec3 a, Vec3 b)
 {
@@ -70,6 +66,16 @@ Vec3 multiply_vec3(Vec3 a, float scalar)
     result.y = a.y * scalar;
     result.z = a.z * scalar;
     return result;
+}
+
+Vec3 subtract_vec3(Vec3 a, Vec3 b)
+{
+    return add_vec3(a, multiply_vec3(b, -1.0f));
+}
+
+Vec3 lerp_vec3(Vec3 a, Vec3 b, float t)
+{
+    return add_vec3(a, multiply_vec3(subtract_vec3(b, a), t));
 }
 
 PSLG generate_plsg(Vec3* vertices, int vertex_count)
@@ -166,11 +172,11 @@ int intersecting_segments(Vec3 a, Vec3 b, Vec3 c, Vec3 d, Vec3* out)
         }
         if (vertical == 1)
         {
-            *out = add_vec3(c, multiply_vec3(subtract_vec3(d, c), t_avg));
+            *out = lerp_vec3(c, d, t_avg);
         }
         else if (vertical == 2)
         {
-            *out = add_vec3(a, multiply_vec3(subtract_vec3(b, a), t_avg));
+            *out = lerp_vec3(a, b, t_avg);
         }
         return 1;
     }
@@ -190,8 +196,9 @@ int intersecting_segments(Vec3 a, Vec3 b, Vec3 c, Vec3 d, Vec3* out)
     {
         return 0;
     }
-    Vec3 v1 = add_vec3(a, multiply_vec3(subtract_vec3(b, a), t));
-    Vec3 v2 = add_vec3(c, multiply_vec3(subtract_vec3(d, c), u));
+
+    Vec3 v1 = lerp_vec3(a, b, t);
+    Vec3 v2 = lerp_vec3(c, d, u);
     if (fabs(v1.z - v2.z) < EPSILON)
     {
         *out = multiply_vec3(add_vec3(v1, v2), 0.5f);
@@ -199,7 +206,49 @@ int intersecting_segments(Vec3 a, Vec3 b, Vec3 c, Vec3 d, Vec3* out)
     }
     return 0;
 }
+int splitPSLG(PSLG* pslg, int edge1, int edge2)
+{
+    Vec3 out;
+    if
+    (
+        pslg->edges[edge1][0] == pslg->edges[edge2][0] ||
+        pslg->edges[edge1][0] == pslg->edges[edge2][1] ||
+        pslg->edges[edge1][1] == pslg->edges[edge2][0] ||
+        pslg->edges[edge1][1] == pslg->edges[edge2][1]
+    )
+    {
+        return NOOP;
+    }
 
+    Vec3 v1 = pslg->vertices[pslg->edges[edge1][0]];
+    Vec3 v2 = pslg->vertices[pslg->edges[edge1][1]];
+    Vec3 v3 = pslg->vertices[pslg->edges[edge2][0]];
+    Vec3 v4 = pslg->vertices[pslg->edges[edge2][1]];
+    if(!intersecting_segments(
+        v1,
+        v2,
+        v3,
+        v4,
+        &out
+    ))
+    {
+        return NOOP;
+    }
+    pslg->vertices = realloc(pslg->vertices, sizeof(Vec3) * (pslg->vertex_count + 1));
+    pslg->edges = realloc(pslg->edges, sizeof(int*) * (pslg->edge_count + 2));  
+    pslg->edges[pslg->edge_count] = malloc(2 * sizeof(int));
+    pslg->edges[pslg->edge_count + 1] = malloc(2 * sizeof(int));
+    pslg->vertices[pslg->vertex_count] = out;
+    pslg->edges[pslg->edge_count][0] = pslg->edges[edge1][1];
+    pslg->edges[pslg->edge_count][1] = pslg->vertex_count;
+    pslg->edges[pslg->edge_count+1][0] = pslg->edges[edge2][1];
+    pslg->edges[pslg->edge_count+1][1] = pslg->vertex_count;
+    pslg->edges[edge1][1] = pslg->vertex_count;
+    pslg->edges[edge2][1] = pslg->vertex_count;
+    pslg->edge_count+=2;
+    pslg->vertex_count+=1;
+    return SUCCESS;
+}
 void print_vertex(Vec3 v)
 {
     printf("\t\tX: %f\n", v.x);
