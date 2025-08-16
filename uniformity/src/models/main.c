@@ -20,10 +20,14 @@ main.c - A program that does off parsing and rendering and stuff
 #include <string.h>
 #include <math.h>
 #include <stdint.h>
+#include <windows.h>
+#include <gl/GL.h>
 #define EPSILON 0.0001
 #define FAILURE 0 
 #define SUCCESS 1
 #define NOOP 2
+const char g_szClassName[] = "MyWindowClass";
+
 typedef struct 
 {
     float x, y, z;
@@ -46,9 +50,50 @@ typedef struct
     int** edges;
     int vertex_count;
     int edge_count;
-} PSLG;
+} 
+PSLG;
 
+typedef struct
+{
+    Vec3** triangles;
+    int triangle_count;
+}
+Triangulation;
 
+typedef struct
+{
+    PSLG* pslg;
+    Triangulation* triangulation;
+}
+PSLGTriangulation;
+
+Triangulation* empty_triangulation()
+{
+    Triangulation* tri = malloc(sizeof(Triangulation));
+    if (!tri)
+    {
+        return NULL;
+    }
+    tri->triangle_count = 0;
+    tri->triangles = NULL;
+    return tri;
+
+}
+
+int add_triangle(Triangulation* tri, Vec3 a, Vec3 b, Vec3 c)
+{
+    if (!tri) 
+    {
+        return FAILURE;
+    }
+
+    tri->triangles = realloc(tri->triangles, (tri->triangle_count+1) * sizeof(Vec3*) );
+    tri->triangles[tri->triangle_count] = malloc(3 * sizeof(Vec3));
+    tri->triangles[tri->triangle_count][0] = a;
+    tri->triangles[tri->triangle_count][1] = b;
+    tri->triangles[tri->triangle_count][2] = c;
+    return SUCCESS;
+}
 
 Vec3 add_vec3(Vec3 a, Vec3 b)
 {
@@ -78,7 +123,7 @@ Vec3 lerp_vec3(Vec3 a, Vec3 b, float t)
     return add_vec3(a, multiply_vec3(subtract_vec3(b, a), t));
 }
 
-PSLG generate_plsg(Vec3* vertices, int vertex_count)
+PSLG generate_pslg(Vec3* vertices, int vertex_count)
 {
     PSLG new;
     new.vertex_count = vertex_count;
@@ -248,6 +293,64 @@ int splitPSLG(PSLG* pslg, int edge1, int edge2)
     pslg->edge_count+=2;
     pslg->vertex_count+=1;
     return SUCCESS;
+}
+
+int remove_single_edge(PSLG* pslg)
+{
+    for(int i = 0; i < pslg->edge_count; i++)
+    {
+        for(int j = 0; j < pslg->edge_count; j++)
+        {
+            int result = splitPSLG(pslg, i, j);
+            if(result == NOOP)
+            {
+                continue;
+            }
+            return result;
+        }
+    }
+    return NOOP;
+}
+
+int split_entirely(PSLG* pslg)
+{
+    while(1)
+    {
+        int result = remove_single_edge(pslg);
+        if(result == NOOP) 
+        {
+            return SUCCESS;
+        }
+        if(result == FAILURE)
+        {
+            return FAILURE;
+        }
+    }
+}
+
+int free_pslg(PSLG* pslg)
+{
+    if (!pslg)
+    {
+        return NOOP;
+    }
+    for (int i = 0; i < pslg->edge_count; i++)
+    {
+        free(pslg->edges[i]);
+    }
+
+    free(pslg->edges);
+    free(pslg->vertices);
+    free(pslg);
+    return SUCCESS;
+}
+
+PSLGTriangulation* create_pslg_triangulation(PSLG* pslg)
+{
+    PSLGTriangulation* pslgtri;
+    pslgtri->triangulation = empty_triangulation();
+    pslgtri->pslg = pslg;
+    return pslgtri;
 }
 void print_vertex(Vec3 v)
 {
@@ -422,48 +525,89 @@ int read_vertices (FILE *fin, Polyhedron* poly)
     return 1;
 }
 
-int main (int argc, char *argv[])
+LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 {
-    if (argc < 2) 
+    switch (msg)
     {
-        fprintf(stderr, "Usage: %s filename.off\n", argv[0]);
-        return 1;
+        case WM_CLOSE:
+            DestroyWindow(hwnd);
+            break;
+        case WM_DESTROY:
+            PostQuitMessage(0);
+            break;
+        default:
+            return DefWindowProc(hwnd, msg, wParam, lParam);
     }
-    const char *filename = argv[1];
-    FILE *fin = fopen(filename, "r");
-    if (!fin) 
+    return 0;
+}
+
+void SetupPixelFormat(HDC hdc)
+{
+    PIXELFORMATDESCRIPTOR pfd = {0};
+    pfd.nSize = sizeof(PIXELFORMATDESCRIPTOR);
+    pfd.nVersion = 1;
+    pfd.dwFlags = PFD_DRAW_TO_WINDOW | PFD_SUPPORT_OPENGL | PFD_DOUBLEBUFFER;
+    pfd.iPixelType = PFD_TYPE_RGBA;
+    pfd.cColorBits = 32;
+    pfd.cDepthBits = 24;
+    pfd.iLayerType = PFD_MAIN_PLANE;
+
+    int pf = ChoosePixelFormat(hdc, &pfd);
+    SetPixelFormat(hdc, pf, &pfd);
+}
+
+
+int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow)
+{
+    WNDCLASSEX wc = {0};
+    wc.cbSize = sizeof(WNDCLASSEX);
+    wc.lpfnWndProc = WndProc;
+    wc.hInstance = hInstance;
+    wc.lpszClassName = g_szClassName;
+    wc.hCursor = LoadCursor(NULL, IDC_ARROW);
+    wc.hbrBackground = (HBRUSH)(COLOR_WINDOW + 1);
+
+    if (!RegisterClassEx(&wc)) return 0;
+
+    HWND hwnd = CreateWindowEx(
+        0,
+        g_szClassName,
+        "I made a Window",
+        WS_OVERLAPPEDWINDOW,
+        CW_USEDEFAULT, CW_USEDEFAULT, 800, 600,
+        NULL, NULL, hInstance, NULL);
+    HDC hdc = GetDC(hwnd);      
+    SetupPixelFormat(hdc);       
+    HGLRC hglrc = wglCreateContext(hdc); 
+    wglMakeCurrent(hdc, hglrc);  
+
+
+    ShowWindow(hwnd, nCmdShow);
+    UpdateWindow(hwnd);
+
+    MSG msg;
+    while (1)
     {
-        fprintf(stderr, "Error: Could not open file.\n");
-        return 1;   
-    }
-    int nv, nf;
-    if (!read_off_header(fin, &nv, &nf)) 
-    {
-        goto error;
+        while (PeekMessage(&msg, NULL, 0, 0, PM_REMOVE))
+        {
+            if (msg.message == WM_QUIT)
+                goto cleanup;
+            TranslateMessage(&msg);
+            DispatchMessage(&msg);
+        }
+
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        glBegin(GL_TRIANGLES);
+        glColor3f(1,0,0); glVertex2f(-0.5f,-0.5f);
+        glColor3f(0,1,0); glVertex2f(0.5f,-0.5f);
+        glColor3f(0,0,1); glVertex2f(0.0f,0.5f);
+        glEnd();
+
+        SwapBuffers(hdc);
     }
 
-    Polyhedron* poly = create_polyhedron(nv, nf);
-    if (!read_vertices(fin, poly)) 
-    {
-        goto error;
-    }
-    if (!read_faces(fin, poly)) 
-    {
-        goto error;
-    }
-    print_polyhedron(poly);
-    fclose(fin);
-    free_polyhedron(poly);
-    return 0;
-    error:
-        fprintf(stderr, "Error");
-        if (fin)
-        {
-            fclose(fin);
-        }
-        if (poly)
-        {
-            free_polyhedron(poly);
-        }
-        return 1;
+    cleanup:
+        wglMakeCurrent(NULL, NULL);
+        wglDeleteContext(hglrc);
+        ReleaseDC(hwnd, hdc);
 }
