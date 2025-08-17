@@ -353,6 +353,111 @@ PSLGTriangulation* create_pslg_triangulation(PSLG* pslg)
     pslgtri->pslg = pslg;
     return pslgtri;
 }
+int remove_dangling_vertex(PSLG* pslg, int vertex_idx)
+{
+    for(int i = 0; i < pslg->edge_count; i++)
+    {
+        if(pslg->edges[i][0] == vertex_idx || pslg->edges[i][0] == vertex_idx)
+        {
+            return NOOP;
+        }
+    }
+    // TODO: WRITE THIS
+}
+int attack_vertex(PSLGTriangulation* pslgtri, int vertex_idx)
+{   
+    PSLG* pslg = pslgtri->pslg;
+    Triangulation* tri = pslgtri->triangulation;
+    int d = 0;
+    int e1;
+    int e2;
+    for(int i = 0; i < pslg->edge_count; i++)
+    {
+        if
+        (
+            pslg->edges[i][0] == vertex_idx ||
+            pslg->edges[i][1] == vertex_idx
+        )
+        {
+            d++;
+            if (d > 2)
+            {
+                return NOOP;
+            }
+            if (d > 1)
+            {
+                e2 = i;
+            }
+            else
+            {
+                e1 = i;
+            }
+        }
+    }
+    if (d != 2)
+    {
+        return NOOP;
+    }
+    int v1 = pslg->edges[e1][0];
+    int v2 = pslg->edges[e2][0];
+    int v3 = pslg->edges[e2][1];
+    if (v1 == vertex_idx)
+    {
+        v1 = pslg->edges[e1][1];
+    }
+    if (v2 == vertex_idx)
+    {
+        v2 = pslg->edges[e2][1];
+        v3 = pslg->edges[e2][0];
+    }
+    add_triangle(tri, pslg->vertices[v1], pslg->vertices[v2], pslg->vertices[v3]);
+    int e3;
+    int e3_exists = 0;
+    for(int i = 0; i < pslg->edge_count; i++)
+    {
+        if
+        (
+            (pslg->edges[i][0] == v1 && pslg->edges[i][1] == v2) ||
+            (pslg->edges[i][0] == v2 && pslg->edges[i][1] == v1)
+        )
+        {   
+            e3 = i;
+            e3_exists = 1;
+            break;
+        }
+    }
+    free(pslg->edges[e1]);
+    free(pslg->edges[e2]);
+    int** temp_ptr;
+    int ecount;
+    if(e3_exists)
+    {
+        ecount = (pslg->edge_count - 1);
+    }
+    else
+    {
+        ecount = (pslg->edge_count - 2);
+    }
+    temp_ptr = malloc(ecount * sizeof(int*));
+    int ei = 0;
+    for(int i = 0; i < pslg->edge_count; i++)
+    {
+        if(i == e2 || i == e1)
+        {
+            continue;
+        }
+        temp_ptr[ei] = pslg->edges[i];
+        ei++;
+    }
+    if(!e3_exists)
+    {
+        // add e3 to the last element of temp_ptr
+    }
+    free(pslg->edges);
+    pslg->edges = temp_ptr;
+    pslg->edge_count = ecount;
+    return SUCCESS;
+}
 void print_vertex(Vec3 v)
 {
     printf("\t\tX: %f\n", v.x);
