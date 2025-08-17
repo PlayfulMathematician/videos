@@ -124,52 +124,52 @@ Vec3 lerp_vec3(Vec3 a, Vec3 b, float t)
     return add_vec3(a, multiply_vec3(subtract_vec3(b, a), t));
 }
 
-PSLG generate_pslg(Vec3* vertices, int vertex_count)
+PSLG* generate_pslg(Vec3* vertices, int vertex_count)
 {
-    PSLG new;
-    new.vertex_count = vertex_count;
-    new.edge_count = vertex_count;
-    new.vertices = malloc(vertex_count * sizeof(Vec3));
-    if (!new.vertices) 
+    PSLG* new = malloc(sizeof(PSLG));
+    new->vertex_count = vertex_count;
+    new->edge_count = vertex_count;
+    new->vertices = malloc(vertex_count * sizeof(Vec3));
+    if (!new->vertices) 
     {
-        new.vertex_count = 0;
-        new.edge_count = 0;
-        new.edges = NULL;
+        new->vertex_count = 0;
+        new->edge_count = 0;
+        new->edges = NULL;
         return new;
     }
     for (int i = 0; i < vertex_count; i++)
     {
-        new.vertices[i] = vertices[i];
+        new->vertices[i] = vertices[i];
     }
 
-    new.edges = malloc(new.edge_count * sizeof(int*));
-    if (!new.edges) 
+    new->edges = malloc(new->edge_count * sizeof(int*));
+    if (!new->edges) 
     {
-        free(new.vertices);
-        new.vertex_count = 0;
-        new.edge_count = 0;
+        free(new->vertices);
+        new->vertex_count = 0;
+        new->edge_count = 0;
         return new;
     }
 
     for (int i = 0; i < vertex_count; i++)
     {
-        new.edges[i] = malloc(2 * sizeof(int));
-        if (!new.edges[i]) 
+        new->edges[i] = malloc(2 * sizeof(int));
+        if (!new->edges[i]) 
         {
             for (int j = 0; j < i; j++) 
             {
-                free(new.edges[j]);
+                free(new->edges[j]);
             }
-            free(new.edges);
-            free(new.vertices);
-            new.vertex_count = 0;
-            new.edge_count = 0;
-            new.edges = NULL;
-            new.vertices = NULL;
+            free(new->edges);
+            free(new->vertices);
+            new->vertex_count = 0;
+            new->edge_count = 0;
+            new->edges = NULL;
+            new->vertices = NULL;
             return new;
         }
-        new.edges[i][0] = i;
-        new.edges[i][1] = (i + 1) % vertex_count; 
+        new->edges[i][0] = i;
+        new->edges[i][1] = (i + 1) % vertex_count; 
     }
 
     return new;
@@ -247,7 +247,7 @@ int intersecting_segments(Vec3 a, Vec3 b, Vec3 c, Vec3 d, Vec3* out)
     Vec3 v2 = lerp_vec3(c, d, u);
     if (fabs(v1.z - v2.z) < EPSILON)
     {
-        *out = multiply_vec3(add_vec3(v1, v2), 0.5f);
+        *out = lerp_vec3(v1, v2, 0.5f);
         return 1;
     }
     return 0;
@@ -353,17 +353,7 @@ PSLGTriangulation* create_pslg_triangulation(PSLG* pslg)
     pslgtri->pslg = pslg;
     return pslgtri;
 }
-int remove_dangling_vertex(PSLG* pslg, int vertex_idx)
-{
-    for(int i = 0; i < pslg->edge_count; i++)
-    {
-        if(pslg->edges[i][0] == vertex_idx || pslg->edges[i][0] == vertex_idx)
-        {
-            return NOOP;
-        }
-    }
-    // TODO: WRITE THIS
-}
+
 int attack_vertex(PSLGTriangulation* pslgtri, int vertex_idx)
 {   
     PSLG* pslg = pslgtri->pslg;
@@ -451,11 +441,66 @@ int attack_vertex(PSLGTriangulation* pslgtri, int vertex_idx)
     }
     if(!e3_exists)
     {
-        // add e3 to the last element of temp_ptr
+        temp_ptr[ei] = malloc(2 * sizeof(int));
+        if (!temp_ptr[ei])
+        {
+            return FAILURE; // i am so tired of checking if malloc fails JUST WORK
+        }
+        temp_ptr[ei][0] = v1;
+        temp_ptr[ei][1] = v2;
     }
     free(pslg->edges);
     pslg->edges = temp_ptr;
     pslg->edge_count = ecount;
+    return SUCCESS;
+}
+
+int attack_single_vertex(PSLGTriangulation* pslgtri)
+{
+    for(int i = 0; i < pslgtri->pslg->vertex_count; i++)
+    {
+        int result = attack_vertex(pslgtri, i);
+        if(result == NOOP)
+        {
+            continue;
+        }
+        return result;
+    }
+    return NOOP;
+}
+
+int attack_all_vertices(PSLGTriangulation* pslgtri)
+{
+    while(1)
+    {
+        int result = attack_single_vertex(pslgtri);
+        if(result == NOOP)
+        {
+            return SUCCESS;
+        }
+        if(result == FAILURE)
+        {
+            return FAILURE;
+        }
+    }
+}
+
+// NOTE: this leaks memory
+int generate_triangulation(Vec3* vertices, int vertex_count, Triangulation* tri)
+{
+    PSLG* pslg = generate_pslg(vertices, vertex_count);
+    if (split_entirely(pslg) == FAILURE)
+    {
+        return FAILURE;
+    }
+    PSLGTriangulation* pslgtri = create_pslg_triangulation(pslg);
+    if(attack_all_vertices(pslgtri) == FAILURE)
+    {
+        return FAILURE;
+    }
+    *tri = *pslgtri->triangulation; 
+    free_pslg(pslgtri->pslg);
+    free(pslgtri);
     return SUCCESS;
 }
 void print_vertex(Vec3 v)
@@ -631,6 +676,8 @@ int read_vertices (FILE *fin, Polyhedron* poly)
     return 1;
 }
 
+
+
 LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 {
     switch (msg)
@@ -678,7 +725,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
     HWND hwnd = CreateWindowEx(
         0,
         g_szClassName,
-        "I made a Window",
+        "Window lol",
         WS_OVERLAPPEDWINDOW,
         CW_USEDEFAULT, CW_USEDEFAULT, 800, 600,
         NULL, NULL, hInstance, NULL);
