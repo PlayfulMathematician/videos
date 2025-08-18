@@ -15,6 +15,7 @@ main.c - A program that does off parsing and rendering and stuff
     You should have received a copy of the GNU General Public License
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -354,6 +355,15 @@ PSLGTriangulation* create_pslg_triangulation(PSLG* pslg)
     return pslgtri;
 }
 
+int free_triangulation(Triangulation* triangulation)
+{
+    for(int i = 0; i < triangulation->triangle_count; i++)
+    {
+        free(triangulation->triangles[i]);
+    }
+    free(triangulation);
+}
+
 int attack_vertex(PSLGTriangulation* pslgtri, int vertex_idx)
 {   
     PSLG* pslg = pslgtri->pslg;
@@ -485,7 +495,6 @@ int attack_all_vertices(PSLGTriangulation* pslgtri)
     }
 }
 
-// NOTE: this leaks memory
 int generate_triangulation(Vec3* vertices, int vertex_count, Triangulation* tri)
 {
     PSLG* pslg = generate_pslg(vertices, vertex_count);
@@ -498,9 +507,18 @@ int generate_triangulation(Vec3* vertices, int vertex_count, Triangulation* tri)
     {
         return FAILURE;
     }
-    *tri = *pslgtri->triangulation; 
+    for(int i = 0; i < pslgtri->triangulation->triangle_count; i++)
+    {
+        add_triangle(tri, 
+            pslgtri->triangulation->triangles[i][0],
+            pslgtri->triangulation->triangles[i][1],
+            pslgtri->triangulation->triangles[i][2]
+        );
+    }
+    tri->triangle_count = pslgtri->triangulation->triangle_count;
     free_pslg(pslgtri->pslg);
     free(pslgtri);
+    free_triangulation(pslgtri->triangulation);
     return SUCCESS;
 }
 void print_vertex(Vec3 v)
@@ -751,9 +769,12 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         glBegin(GL_TRIANGLES);
-        glColor3f(1,0,0); glVertex2f(-0.5f,-0.5f);
-        glColor3f(0,1,0); glVertex2f(0.5f,-0.5f);
-        glColor3f(0,0,1); glVertex2f(0.0f,0.5f);
+        glColor3f(1,0,0); 
+        glVertex2f(-0.5f,-0.5f);
+        glColor3f(0,1,0); 
+        glVertex2f(0.5f,-0.5f);
+        glColor3f(0,0,1); 
+        glVertex2f(0.0f,0.5f);
         glEnd();
 
         SwapBuffers(hdc);
