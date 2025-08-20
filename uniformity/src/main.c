@@ -24,6 +24,7 @@ main.c - A program that does off parsing and rendering and stuff
 #include <windows.h>
 #include <gl/GL.h>
 #define EPSILON 0.0001
+#define Dumpster void**
 
 enum Result
 {
@@ -117,10 +118,17 @@ PSLGTriangulation;
 
 typedef struct
 {
-    void* object;
-    int type;
+    int start_t;
+    int end_t;
+    void (*construct)(struct Animation*);
+    void (*preproc)(struct Animation*, int t);
+    void (*render)(struct Animation*, int t);
+    void (*postproc)(struct Animation*, int t);
+    void (*free)(struct Animation*);
+    Dumpster dumpster;
+    int dumpster_size;
 }
-Object;
+Animation;
 
 
 Triangulation* empty_triangulation()
@@ -595,7 +603,7 @@ int merge_triangulations(Triangulation** triangulations, int tri_count, Triangul
     
     for (int i = 0; i < tri_count; i++)
     {
-        for (int j = 0; j < triangulations[i]->triangle_count; i++)
+        for (int j = 0; j < triangulations[i]->triangle_count; j++)
         {
             int out = add_triangle(
                 result, 
