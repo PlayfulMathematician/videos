@@ -24,10 +24,57 @@ main.c - A program that does off parsing and rendering and stuff
 #include <windows.h>
 #include <gl/GL.h>
 #define EPSILON 0.0001
-#define FAILURE 0 
-#define SUCCESS 1
-#define NOOP 2
+
+enum Result
+{
+    FAILURE,
+    SUCCESS,
+    NOOP
+};
+
 const char g_szClassName[] = "MyWindowClass";
+
+typedef union 
+{
+    struct 
+    { 
+        uint8_t r;
+        uint8_t g;
+        uint8_t b;
+    };
+    uint8_t c[3];
+} 
+Color;
+
+Color make_color3(uint8_t r, uint8_t g, uint8_t b) 
+{
+    Color col = { .r = r, .g = g, .b = b };
+    return col;
+}
+
+Color make_color_array(uint8_t arr[3]) 
+{
+    Color col;
+    col.c[0] = arr[0];
+    col.c[1] = arr[1];
+    col.c[2] = arr[2];
+    return col;
+}
+
+#define make_color(x, ...) _Generic((x), \
+    uint8_t: make_color3, \
+    uint8_t*: make_color_array \
+)(x, ##__VA_ARGS__)
+
+void glColor(Color c) 
+{
+    glColor3f(c.r / 255.0f, c.g / 255.0f, c.b / 255.0f);
+}
+
+void print_color(Color c) 
+{
+    printf("Color: R=%u, G=%u, B=%u\n", c.r, c.g, c.b);
+}
 
 typedef struct 
 {
@@ -67,6 +114,14 @@ typedef struct
     Triangulation* triangulation;
 }
 PSLGTriangulation;
+
+typedef struct
+{
+    void* object;
+    int type;
+}
+Object;
+
 
 Triangulation* empty_triangulation()
 {
@@ -361,7 +416,9 @@ int free_triangulation(Triangulation* triangulation)
     {
         free(triangulation->triangles[i]);
     }
+    free(triangulation->triangles);
     free(triangulation);
+    return SUCCESS;
 }
 
 int attack_vertex(PSLGTriangulation* pslgtri, int vertex_idx)
@@ -411,7 +468,6 @@ int attack_vertex(PSLGTriangulation* pslgtri, int vertex_idx)
         v3 = pslg->edges[e2][0];
     }
     add_triangle(tri, pslg->vertices[v1], pslg->vertices[v2], pslg->vertices[v3]);
-    int e3;
     int e3_exists = 0;
     for(int i = 0; i < pslg->edge_count; i++)
     {
@@ -421,7 +477,6 @@ int attack_vertex(PSLGTriangulation* pslgtri, int vertex_idx)
             (pslg->edges[i][0] == v2 && pslg->edges[i][1] == v1)
         )
         {   
-            e3 = i;
             e3_exists = 1;
             break;
         }
@@ -517,10 +572,70 @@ int generate_triangulation(Vec3* vertices, int vertex_count, Triangulation* tri)
     }
     tri->triangle_count = pslgtri->triangulation->triangle_count;
     free_pslg(pslgtri->pslg);
-    free(pslgtri);
     free_triangulation(pslgtri->triangulation);
+    free(pslgtri);
     return SUCCESS;
 }
+
+int merge_triangulations(Triangulation** triangulations, int tri_count, Triangulation* result)
+{
+    Triangulation* e = empty_triangulation();
+    if (e == NULL)
+    {
+        return FAILURE;
+    }
+    result->triangle_count = e->triangle_count;
+    result->triangles = e->triangles;
+    /*
+        Note we use free instead of free_triangulation because
+        result->triangles points to the same memory as e->triangles and 
+        free_triangulation(e) would free e->triangles.
+    */
+    free(e);
+    
+    for (int i = 0; i < tri_count; i++)
+    {
+        for (int j = 0; j < triangulations[i]->triangle_count; i++)
+        {
+            int out = add_triangle(
+                result, 
+                triangulations[i]->triangles[j][0],
+                triangulations[i]->triangles[j][1],
+                triangulations[i]->triangles[j][2]
+            );
+            if (out == FAILURE)
+            {
+                return FAILURE;
+            }
+        }
+    }
+    return SUCCESS;
+}
+
+int triangulate_polyhedra(Polyhedron* poly, Triangulation* result)
+{
+    Triangulation** tris = malloc(poly->face_count * sizeof(Triangulation*));
+    for (int i = 0; i < poly->face_count; i++)
+    {
+        Triangulation* t = empty_triangulation();
+        Vec3* vertices = malloc(poly->face_sizes[i] * sizeof(Vec3));
+        for (int j = 0; j < poly->face_sizes[i]; j++)
+        {
+            vertices[j] = poly->vertices[poly->faces[i][j]];
+        }
+        generate_triangulation(vertices, poly->face_sizes[i], t);
+        free(vertices);
+        tris[i] = t;
+    }
+    merge_triangulations(tris, poly->face_count, result);
+    for(int i = 0; i < poly->face_count; i++)
+    {
+        free_triangulation(tris[i]);
+    }
+    free(tris);
+    return SUCCESS;
+}
+
 void print_vertex(Vec3 v)
 {
     printf("\t\tX: %f\n", v.x);
@@ -569,7 +684,7 @@ void free_polyhedron(Polyhedron* poly)
     free(poly);
 }
 
-int read_off_header (FILE *fin, int *nv, int *nf)
+int read_off_header (FILE* fin, int* nv, int* nf)
 {
     char line[256];
     if (!fgets(line, sizeof(line), fin))
@@ -598,7 +713,7 @@ int read_off_header (FILE *fin, int *nv, int *nf)
     return 1;
 }
 
-int read_vertex (FILE *fin, Polyhedron *poly, int vertex_idx)
+int read_vertex (FILE* fin, Polyhedron* poly, int vertex_idx)
 {
     char line[256];
     do 
@@ -620,7 +735,7 @@ int read_vertex (FILE *fin, Polyhedron *poly, int vertex_idx)
     return 1;
 }
 
-int read_face (FILE *fin, Polyhedron *poly, int face_index)
+int read_face (FILE* fin, Polyhedron* poly, int face_index)
 {
 
     char line[1024];
@@ -633,7 +748,7 @@ int read_face (FILE *fin, Polyhedron *poly, int face_index)
     } 
     while (line[0] == '#' || line[0] == '\n');
     int n;
-    char *ptr = line;
+    char* ptr = line;
 
     if (sscanf(ptr, "%d", &n) != 1)
     {
@@ -670,7 +785,7 @@ int read_face (FILE *fin, Polyhedron *poly, int face_index)
 
 }
 
-int read_faces(FILE *fin, Polyhedron* poly)
+int read_faces(FILE* fin, Polyhedron* poly)
 {
     for (int i = 0; i < poly->face_count; i++)
     {
@@ -682,7 +797,7 @@ int read_faces(FILE *fin, Polyhedron* poly)
     return 1;
 }
 
-int read_vertices (FILE *fin, Polyhedron* poly) 
+int read_vertices (FILE* fin, Polyhedron* poly) 
 {
     for (int i = 0; i < poly->vertex_count; i++) 
     {
@@ -694,7 +809,15 @@ int read_vertices (FILE *fin, Polyhedron* poly)
     return 1;
 }
 
-
+Polyhedron* polyhedra_from_off(FILE* fin)
+{
+    int nv, nf;
+    read_off_header(fin, &nv, &nf);
+    Polyhedron* poly = create_polyhedron(nv, nf);
+    read_vertices(fin, poly);
+    read_faces(fin, poly);
+    return poly;
+}
 
 LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 {
@@ -757,6 +880,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
     UpdateWindow(hwnd);
 
     MSG msg;
+    float t = 0;
     while (1)
     {
         while (PeekMessage(&msg, NULL, 0, 0, PM_REMOVE))
@@ -766,15 +890,15 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
             TranslateMessage(&msg);
             DispatchMessage(&msg);
         }
-
+        t+=0.0001;
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         glBegin(GL_TRIANGLES);
         glColor3f(1,0,0); 
-        glVertex2f(-0.5f,-0.5f);
-        glColor3f(0,1,0); 
-        glVertex2f(0.5f,-0.5f);
+        glVertex3f(t,-0.5f,0.0f);
+        glColor3f(0,t,0); 
+        glVertex3f(0.5f,-0.5f,0.0f);
         glColor3f(0,0,1); 
-        glVertex2f(0.0f,0.5f);
+        glVertex3f(0.0f,0.5f,0.0f);
         glEnd();
 
         SwapBuffers(hdc);
@@ -784,4 +908,5 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
         wglMakeCurrent(NULL, NULL);
         wglDeleteContext(hglrc);
         ReleaseDC(hwnd, hdc);
+    return 0;
 }

@@ -10,8 +10,6 @@ __pycache__
 .idea
 .DS_Store
 Thumbs.db
-uniformity/unity/Recordings/
 .vscode
 media
 *.exe
-uniformity/src/models/a.exe

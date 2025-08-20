@@ -1,4 +1,0 @@
-# This file is used internally by FFMPEG.
-file 'file:C:/Users/playf/stuff_bin/videos/uniformity/src/manim/media/videos/main/2160p60/partial_movie_files/TexExample/2175060528_812051464_223132457.mp4'
-file 'file:C:/Users/playf/stuff_bin/videos/uniformity/src/manim/media/videos/main/2160p60/partial_movie_files/TexExample/1958024790_1711680361_3900351249.mp4'
-file 'file:C:/Users/playf/stuff_bin/videos/uniformity/src/manim/media/videos/main/2160p60/partial_movie_files/TexExample/1958024790_1839128356_631829896.mp4'
