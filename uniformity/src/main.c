@@ -115,20 +115,20 @@ typedef struct
     Triangulation* triangulation;
 }
 PSLGTriangulation;
+typedef struct Animation Animation;  // forward declaration
 
-typedef struct
+struct Animation
 {
     int start_t;
     int end_t;
-    void (*construct)(struct Animation*);
+    void (*construct)(Animation*);
     void (*preproc)(struct Animation*, int t);
     void (*render)(struct Animation*, int t);
     void (*postproc)(struct Animation*, int t);
     void (*free)(struct Animation*);
     Dumpster dumpster;
     int dumpster_size;
-}
-Animation;
+};
 
 
 Triangulation* empty_triangulation()
