@@ -16,12 +16,10 @@
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 '''
-import requests # pylint: disable=unused-import
-from bs4 import BeautifulSoup # pylint: disable=unused-import
-def main():
-    """Main entry point for the download script."""
-    # TODO: implement your download logic here
-    pass # pylint: disable=unnecessary-pass
+import requests # pylint: disable=W0611
+from bs4 import BeautifulSoup # pylint: disable=W0611
+def main(): # pylint: disable=C0116
+    pass
 
 if __name__ == "__main__":
-    main()
+    main() # pylint: disable=C0304
