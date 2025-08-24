@@ -35,6 +35,30 @@ enum Result
     NOOP
 };
 
+void reshape_fixed_ratio(int win_w, int win_h)
+{
+    if (win_h <= 0) win_h = 1;
+    float target_aspect = 16.0f / 9.0f;   
+    float window_aspect = (float)win_w / (float)win_h;
+    int vp_x = 0, vp_y = 0;
+    int vp_w = win_w, vp_h = win_h;
+    if (window_aspect > target_aspect) {
+        //wide
+        vp_w = (int)(win_h * target_aspect);
+        vp_x = (win_w - vp_w) / 2;
+    } else {
+        //tall
+        vp_h = (int)(win_w / target_aspect);
+        vp_y = (win_h - vp_h) / 2;
+    }
+    glViewport(vp_x, vp_y, vp_w, vp_h);
+    glMatrixMode(GL_PROJECTION);
+    glLoadIdentity();
+    glOrtho(-1, 1, -1, 1, -1, 1);
+    glMatrixMode(GL_MODELVIEW);
+    glLoadIdentity();
+}
+
 const char g_szClassName[] = "MyWindowClass";
 
 typedef union 
@@ -875,7 +899,18 @@ Polyhedron* polyhedra_from_off(FILE* fin)
 LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 {
     switch (msg)
-    {
+    {   
+        case WM_SIZE:
+        {      
+            int width  = LOWORD(lParam);
+            int height = HIWORD(lParam);
+            if (height == 0) // w/h
+            {
+                height = 1; 
+            }
+            reshape_fixed_ratio(width, height);
+            return 0;
+        }
         case WM_CLOSE:
             DestroyWindow(hwnd);
             break;
