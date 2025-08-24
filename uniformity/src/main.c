@@ -222,6 +222,10 @@ int add_triangle(Triangulation* tri, Vec3 a, Vec3 b, Vec3 c)
 
     tri->triangles = realloc(tri->triangles, (tri->triangle_count+1) * sizeof(Vec3*) );
     tri->triangles[tri->triangle_count] = malloc(3 * sizeof(Vec3));
+    if(!tri->triangles[tri->triangle_count])
+    {
+        return FAILURE;
+    }
     tri->triangles[tri->triangle_count][0] = a;
     tri->triangles[tri->triangle_count][1] = b;
     tri->triangles[tri->triangle_count][2] = c;
@@ -260,6 +264,10 @@ Vec3 lerp_vec3(Vec3 a, Vec3 b, float t)
 PSLG* generate_pslg(Vec3* vertices, int vertex_count)
 {
     PSLG* new = malloc(sizeof(PSLG));
+    if(!new)
+    {
+        return new;
+    }
     new->vertex_count = vertex_count;
     new->edge_count = vertex_count;
     new->vertices = malloc(vertex_count * sizeof(Vec3));
@@ -413,10 +421,19 @@ int splitPSLG(PSLG* pslg, int edge1, int edge2)
     {
         return NOOP;
     }
+    // TODO: HANDLE REALLOC FAILURE
     pslg->vertices = realloc(pslg->vertices, sizeof(Vec3) * (pslg->vertex_count + 1));
     pslg->edges = realloc(pslg->edges, sizeof(int*) * (pslg->edge_count + 2));  
     pslg->edges[pslg->edge_count] = malloc(2 * sizeof(int));
+    if(!pslg->edges[pslg->edge_count])
+    {
+        return FAILURE;
+    }
     pslg->edges[pslg->edge_count + 1] = malloc(2 * sizeof(int));
+    if(!pslg->edges[pslg->edge_count + 1])
+    {
+        return FAILURE;
+    }
     pslg->vertices[pslg->vertex_count] = out;
     pslg->edges[pslg->edge_count][0] = pslg->edges[edge1][1];
     pslg->edges[pslg->edge_count][1] = pslg->vertex_count;
@@ -479,11 +496,21 @@ int free_pslg(PSLG* pslg)
     return SUCCESS;
 }
 
-PSLGTriangulation* create_pslg_triangulation(PSLG* pslg)
+PSLGTriangulation* create_pslg_triangulation(PSLG* pslg, int* result)
 {
     PSLGTriangulation* pslgtri = malloc(sizeof(PSLGTriangulation));
+    if (!pslgtri)
+    {
+        *result = FAILURE;
+    }
     pslgtri->triangulation = empty_triangulation();
+    if (!pslgtri->triangulation)
+    {
+        free(pslgtri);
+        return NULL;
+    }
     pslgtri->pslg = pslg;
+    *result = SUCCESS;
     return pslgtri;
 }
 
@@ -571,6 +598,10 @@ int attack_vertex(PSLGTriangulation* pslgtri, int vertex_idx)
         ecount = (pslg->edge_count - 2);
     }
     temp_ptr = malloc(ecount * sizeof(int*));
+    if (!temp_ptr)
+    {
+        return FAILURE;
+    }
     int ei = 0;
     for(int i = 0; i < pslg->edge_count; i++)
     {
@@ -634,7 +665,13 @@ int generate_triangulation(Vec3* vertices, int vertex_count, Triangulation* tri)
     {
         return FAILURE;
     }
-    PSLGTriangulation* pslgtri = create_pslg_triangulation(pslg);
+    int result;
+    PSLGTriangulation* pslgtri = create_pslg_triangulation(pslg, &result);
+    if (result == FAILURE)
+    {
+        free_pslg(pslg);
+        return FAILURE;
+    }
     if(attack_all_vertices(pslgtri) == FAILURE)
     {
         return FAILURE;
@@ -689,13 +726,22 @@ int merge_triangulations(Triangulation** triangulations, int tri_count, Triangul
     return SUCCESS;
 }
 
+// a culmination of a lot of this project
 int triangulate_polyhedra(Polyhedron* poly, Triangulation* result)
 {
     Triangulation** tris = malloc(poly->face_count * sizeof(Triangulation*));
+    if (!tris)
+    {
+        return FAILURE;
+    }
     for (int i = 0; i < poly->face_count; i++)
     {
         Triangulation* t = empty_triangulation();
         Vec3* vertices = malloc(poly->face_sizes[i] * sizeof(Vec3));
+        if (!vertices)
+        {
+            return FAILURE;
+        }
         for (int j = 0; j < poly->face_sizes[i]; j++)
         {
             vertices[j] = poly->vertices[poly->faces[i][j]];
@@ -713,6 +759,7 @@ int triangulate_polyhedra(Polyhedron* poly, Triangulation* result)
     return SUCCESS;
 }
 
+// t
 void print_vertex(Vec3 v)
 {
     printf("\t\tX: %f\n", v.x);
@@ -741,11 +788,27 @@ void print_polyhedron(Polyhedron* poly)
 Polyhedron* create_polyhedron(int nv, int nf) 
 {
     Polyhedron* poly = malloc(sizeof(Polyhedron));
+    if (!poly)
+    {
+        exit(1);
+    }
     poly->vertex_count = nv;
     poly->face_count = nf;
     poly->vertices = malloc(nv * sizeof(Vec3));
+    if (!poly->vertices)
+    {
+        exit(1);
+    }
     poly->faces = malloc(nf * sizeof(int*));
+    if (!poly->faces)
+    {
+        exit(1);
+    }
     poly->face_sizes = malloc(nf * sizeof(int));
+    if (!poly->face_sizes)
+    {
+        exit(1);
+    }
     return poly;
 }
 
