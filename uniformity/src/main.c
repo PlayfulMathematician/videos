@@ -34,7 +34,6 @@ This will be restructured so the result is inserted as a parameter.
 This allow for more useful outputs to functions.
 Also MEMORY ALLOCATION IS TERRIBLE.
 I hate C
-
 */
 #include <stdio.h>
 #include <stdlib.h>
