@@ -17,6 +17,25 @@
 
 */
 
+
+/*
+Hello, main.c contains about a thousand lines of code pertaining to many things that seem disconnected. 
+Let me explain what this file is actually for. 
+I am making an animation engine in C. It will animate polyhedra.
+Thus there are like 4 main sections of code:
+    OpenGL+Win32
+    Polyhedra Triangulation
+    OFF Parsing
+    Animation Structs (mostly boilerplate)
+
+This is a disorganized mess right now, but notice most functions return an int. 
+An int in the Result enum. 
+This will be restructured so the result is inserted as a parameter.
+This allow for more useful outputs to functions.
+Also MEMORY ALLOCATION IS TERRIBLE.
+I hate C
+
+*/
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
