@@ -1,4 +1,4 @@
-venv
+# Build artifcats
 *.aux
 *.log
 *.run.xml
@@ -6,9 +6,12 @@ venv
 *.bbl
 *.blg
 *.ent
-__pycache__
-.idea
-.DS_Store
-Thumbs.db
-.vscode
 *.exe
+__pycache__
+# Visual Studio Code and Jetbrains IDE stuff
+.idea
+.vscode
+# Thumbnails
+Thumbs.db
+
+uniformity/media/models/off

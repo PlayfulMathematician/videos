@@ -16,10 +16,57 @@
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 '''
-import requests # pylint: disable=W0611
-from bs4 import BeautifulSoup # pylint: disable=W0611
-def main(): # pylint: disable=C0116
-    pass
+import json
+import os
+import warnings
+warnings.filterwarnings("ignore", category=DeprecationWarning) # shut it bs4
+from bs4 import BeautifulSoup
+import requests
+headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36"}
+
+def e(url, depth=3):
+    if depth < 0:
+        print("I give up")
+        os._exit(0)
+    elif depth < 3:
+        print(f"We failed {3-depth} times")
+        print("Retrying")
+    else:
+        pass
+    # miraheze gets angry when useragent is bad
+    j = requests.get(url, headers=headers)
+    if j.status_code != 200:
+        return e(url,depth-1)
+    soup = BeautifulSoup(j.text, features="html.parser")
+    author=soup.find("td", id="fileinfotpl_aut").find_next_sibling("td").get_text(strip=True)
+    file=soup.find("div", id="file").findChildren()[0].get("href")
+    return [file, author]
+    
+def main(): 
+    try:
+        os.mkdir("../media/models/off")
+    except Exception as qa:
+        pass
+    with open("../media/models/modellist.json", "r") as f:
+        out = json.load(f)
+    contributors = []
+    for i in out:
+        z = e(i[0])
+        if z[1] not in contributors:
+            contributors.append(z[1])
+
+        with open("../media/models/off/" + i[1], "w") as q:
+            j = requests.get("https:"+z[0], headers=headers)
+            j.raise_for_status()
+            q.write(j.text)
+    contrib_path = "../media/models/CONTRIBUTIONS.md"
+    with open(contrib_path, "w", encoding="utf-8") as f:
+        f.write("# Contributors\n\n")
+        for name in sorted(contributors):
+            f.write(f"- {name}\n")
+    
+
+        
 
 if __name__ == "__main__":
-    main() # pylint: disable=C0304
+    main()

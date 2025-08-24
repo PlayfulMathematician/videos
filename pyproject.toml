@@ -12,9 +12,9 @@ requires-python = ">=3.13"
 
 [tool.poetry.dependencies]
 python = ">=3.13"
-aiohttp = ">=3.12.15,<4.0.0"
 bs4 = ">=0.0.2,<0.0.3"
 requests = ">=2.31.0,<3.0.0"
 
-[tool.poetry.dev-dependencies]
+[tool.poetry.group.dev.dependencies]
 pylint = ">=3.3.8,<4.0.0"
+
