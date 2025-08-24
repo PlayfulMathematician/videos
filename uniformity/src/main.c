@@ -64,11 +64,6 @@ Color make_color_array(uint8_t arr[3])
     return col;
 }
 
-#define make_color(x, ...) _Generic((x), \
-    uint8_t: make_color3, \
-    uint8_t*: make_color_array \
-)(x, ##__VA_ARGS__)
-
 void glColor(Color c) 
 {
     glColor3f(c.r / 255.0f, c.g / 255.0f, c.b / 255.0f);
@@ -126,6 +121,7 @@ typedef struct
 Dumpster;
 
 typedef struct Animation Animation;
+typedef struct GlobalBuffer GlobalBuffer;
 
 struct Animation
 {
@@ -140,6 +136,9 @@ struct Animation
 };
 
 typedef struct AnimationSection AnimationSection;  // forward declaration
+typedef struct VideoData VideoData;  
+typedef struct GlobalBuffer GlobalBuffer;  
+
 
 struct AnimationSection
 {
@@ -148,10 +147,34 @@ struct AnimationSection
     int animation_count;
     int start_t;
     int end_t;
-    void (*render)(struct AnimationSection*, int t);
+    void (*render)(struct AnimationSection*, int t); // rendering handled here for order stuff
+    void (*init)(struct AnimationSection*);
     Dumpster dumpster;
+    VideoData* vd;
 };
 
+struct VideoData
+{
+    AnimationSection* animation_section;
+    int section_count;
+    GlobalBuffer* gb;
+    void (*init)(struct VideoData*); 
+};
+
+typedef struct
+{
+   char*** sounds;
+   int* sound_count;
+   int channel_count;
+   GlobalBuffer* gb;
+}
+SoundData;
+
+struct GlobalBuffer
+{
+    SoundData* sounddata;
+    VideoData* videodata;
+};
 
 Triangulation* empty_triangulation()
 {
