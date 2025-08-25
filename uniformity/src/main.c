@@ -977,7 +977,7 @@ Polyhedron* polyhedra_from_off(FILE* fin)
     read_faces(fin, poly);
     return poly;
 }
-
+// WARNING THIS FUNCTION IS DEEPLY NESTED
 void render_gb(GlobalBuffer* gb, int t)
 {
     for(int i = 0; i < gb->videodata->section_count; i++)
@@ -1043,24 +1043,35 @@ void render_gb(GlobalBuffer* gb, int t)
 
 int main(int argc, char *argv[]) {
     SDL_Init(SDL_INIT_VIDEO);
-
+    SDL_GL_SetAttribute(SDL_GL_MULTISAMPLEBUFFERS, 1);
+    SDL_GL_SetAttribute(SDL_GL_MULTISAMPLESAMPLES, 4);
     SDL_Window *win = SDL_CreateWindow(
-        "Bare Minimum Window",
-        SDL_WINDOWPOS_CENTERED,
-        SDL_WINDOWPOS_CENTERED,
+        "Me When Triangle",
+        SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
         800, 600,
-        SDL_WINDOW_SHOWN
+        SDL_WINDOW_OPENGL | SDL_WINDOW_SHOWN
     );
-
+    SDL_GLContext ctx = SDL_GL_CreateContext(win);
+    glEnable(0x809D); 
     SDL_Event e;
     int running = 1;
     while (running) {
-        while (SDL_PollEvent(&e)) {
+        while (SDL_PollEvent(&e))
             if (e.type == SDL_QUIT) running = 0;
-        }
+
+        glClearColor(0.2f, 0.3f, 0.4f, 1.0f);
+        glClear(GL_COLOR_BUFFER_BIT);
+
+        glBegin(GL_TRIANGLES);
+            glColor3f(1, 0, 0); glVertex2f(-0.5f, -0.5f);
+            glColor3f(0, 1, 0); glVertex2f(0.5f, -0.5f);
+            glColor3f(0, 0, 1); glVertex2f(0.0f, 0.5f);
+        glEnd();
+
+        SDL_GL_SwapWindow(win);
     }
 
+    SDL_GL_DeleteContext(ctx);
     SDL_DestroyWindow(win);
     SDL_Quit();
-    return 0;
 }
