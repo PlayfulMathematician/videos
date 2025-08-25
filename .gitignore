@@ -13,5 +13,5 @@ __pycache__
 .vscode
 # Thumbnails
 Thumbs.db
-
+*.dll
 uniformity/media/models/off

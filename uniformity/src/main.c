@@ -41,9 +41,10 @@ I hate C
 #include <math.h>
 #include <stdint.h>
 #include <windows.h>
-#include <gl/GL.h>
-#include <mmsystem.h>
-#pragma comment(lib,"winmm.lib") 
+#include <SDL2/SDL.h>
+#include <SDL2/SDL_mixer.h>
+#include <GL/gl.h>
+#include <stdio.h>
 #define EPSILON 0.0001
 
 enum Result
@@ -52,30 +53,6 @@ enum Result
     SUCCESS,
     NOOP
 };
-
-void reshape_fixed_ratio(int win_w, int win_h)
-{
-    if (win_h <= 0) win_h = 1;
-    float target_aspect = 16.0f / 9.0f;   
-    float window_aspect = (float)win_w / (float)win_h;
-    int vp_x = 0, vp_y = 0;
-    int vp_w = win_w, vp_h = win_h;
-    if (window_aspect > target_aspect) {
-        //wide
-        vp_w = (int)(win_h * target_aspect);
-        vp_x = (win_w - vp_w) / 2;
-    } else {
-        //tall
-        vp_h = (int)(win_w / target_aspect);
-        vp_y = (win_h - vp_h) / 2;
-    }
-    glViewport(vp_x, vp_y, vp_w, vp_h);
-    glMatrixMode(GL_PROJECTION);
-    glLoadIdentity();
-    glOrtho(-1, 1, -1, 1, -1, 1);
-    glMatrixMode(GL_MODELVIEW);
-    glLoadIdentity();
-}
 
 const char g_szClassName[] = "MyWindowClass";
 
@@ -1063,97 +1040,27 @@ void render_gb(GlobalBuffer* gb, int t)
     }
 }
 
-LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
-{
-    switch (msg)
-    {   
-        case WM_SIZE:
-        {      
-            int width  = LOWORD(lParam);
-            int height = HIWORD(lParam);
-            if (height == 0) // w/h
-            {
-                height = 1; 
-            }
-            reshape_fixed_ratio(width, height);
-            return 0;
+
+int main(int argc, char *argv[]) {
+    SDL_Init(SDL_INIT_VIDEO);
+
+    SDL_Window *win = SDL_CreateWindow(
+        "Bare Minimum Window",
+        SDL_WINDOWPOS_CENTERED,
+        SDL_WINDOWPOS_CENTERED,
+        800, 600,
+        SDL_WINDOW_SHOWN
+    );
+
+    SDL_Event e;
+    int running = 1;
+    while (running) {
+        while (SDL_PollEvent(&e)) {
+            if (e.type == SDL_QUIT) running = 0;
         }
-        case WM_CLOSE:
-            DestroyWindow(hwnd);
-            break;
-        case WM_DESTROY:
-            PostQuitMessage(0);
-            break;
-        default:
-            return DefWindowProc(hwnd, msg, wParam, lParam);
     }
-    return 0;
-}
 
-void SetupPixelFormat(HDC hdc)
-{
-    PIXELFORMATDESCRIPTOR pfd = {0};
-    pfd.nSize = sizeof(PIXELFORMATDESCRIPTOR);
-    pfd.nVersion = 1;
-    pfd.dwFlags = PFD_DRAW_TO_WINDOW | PFD_SUPPORT_OPENGL | PFD_DOUBLEBUFFER;
-    pfd.iPixelType = PFD_TYPE_RGBA;
-    pfd.cColorBits = 32;
-    pfd.cDepthBits = 24;
-    pfd.iLayerType = PFD_MAIN_PLANE;
-
-    int pf = ChoosePixelFormat(hdc, &pfd);
-    SetPixelFormat(hdc, pf, &pfd);
-}
-
-int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow)
-{
-    WNDCLASSEX wc = {0};
-    wc.cbSize = sizeof(WNDCLASSEX);
-    wc.lpfnWndProc = WndProc;
-    wc.hInstance = hInstance;
-    wc.lpszClassName = g_szClassName;
-    wc.hCursor = LoadCursor(NULL, IDC_ARROW);
-    wc.hbrBackground = (HBRUSH)(COLOR_WINDOW + 1);
-
-    if (!RegisterClassEx(&wc)) return 0;
-
-    HWND hwnd = CreateWindowEx(
-        0,
-        g_szClassName,
-        "Window lol",
-        WS_OVERLAPPEDWINDOW,
-        CW_USEDEFAULT, 
-        CW_USEDEFAULT, 
-        800, 
-        600,
-        NULL, 
-        NULL, 
-        hInstance, 
-        NULL);
-    HDC hdc = GetDC(hwnd);      
-    SetupPixelFormat(hdc);       
-    HGLRC hglrc = wglCreateContext(hdc); 
-    wglMakeCurrent(hdc, hglrc);  
-
-
-    ShowWindow(hwnd, nCmdShow);
-    UpdateWindow(hwnd);
-
-    MSG msg;
-    while (1)
-    {
-        while (PeekMessage(&msg, NULL, 0, 0, PM_REMOVE))
-        {
-            if (msg.message == WM_QUIT)
-                goto cleanup;
-            TranslateMessage(&msg);
-            DispatchMessage(&msg);
-        }
-        SwapBuffers(hdc);
-    }
-    cleanup:
-        wglMakeCurrent(NULL, NULL);
-        wglDeleteContext(hglrc);
-        ReleaseDC(hwnd, hdc);
+    SDL_DestroyWindow(win);
+    SDL_Quit();
     return 0;
 }
