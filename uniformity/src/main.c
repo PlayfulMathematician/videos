@@ -177,6 +177,8 @@ struct Animation
     Dumpster dumpster;
 };
 
+
+
 typedef struct AnimationSection AnimationSection;  // forward declaration
 typedef struct VideoData VideoData;  
 typedef struct GlobalBuffer GlobalBuffer;  
@@ -189,9 +191,7 @@ struct AnimationSection
     int animation_count;
     int start_t;
     int end_t;
-    void (*render)(struct AnimationSection*, int t); // rendering handled here for order stuff
     void (*init)(struct AnimationSection*);
-    Dumpster dumpster;
     VideoData* vd;
 };
 
@@ -201,12 +201,15 @@ struct VideoData
     int section_count;
     GlobalBuffer* gb;
     void (*init)(struct VideoData*); 
+    void (*free)(struct VideoData*); 
 };
 
 typedef struct
 {
    char*** sounds;
    int* sound_count;
+   float** start_t;
+   float** end_t;
    int channel_count;
    GlobalBuffer* gb;
 }
@@ -217,6 +220,25 @@ struct GlobalBuffer
     SoundData* sounddata;
     VideoData* videodata;
 };
+
+typedef struct {
+    float eye[3];
+    float center[3];
+    float up[3];
+    float fov;
+    float aspect;
+    float nearZ;
+    float farZ;
+    float lightPos[4];
+    float ambient[4];
+    float diffuse[4];
+    float specular[4];
+    float matAmbient[4];
+    float matDiffuse[4];
+    float matSpecular[4];
+    float shininess;
+} CameraLighting;
+
 
 Triangulation* empty_triangulation()
 {
@@ -955,6 +977,8 @@ int read_faces(FILE* fin, Polyhedron* poly)
     return 1;
 }
 
+
+
 int read_vertices (FILE* fin, Polyhedron* poly) 
 {
     for (int i = 0; i < poly->vertex_count; i++) 
@@ -975,6 +999,68 @@ Polyhedron* polyhedra_from_off(FILE* fin)
     read_vertices(fin, poly);
     read_faces(fin, poly);
     return poly;
+}
+
+void render_gb(GlobalBuffer* gb, int t)
+{
+    for(int i = 0; i < gb->videodata->section_count; i++)
+    {
+        if (gb->videodata->animation_section[i].end_t <= t || gb->videodata->animation_section[i].start_t >= t)
+        {
+            if (t == gb->videodata->animation_section[i].start_t)
+            {
+                gb->videodata->animation_section[i].init(&gb->videodata->animation_section[i]);
+            }
+            if (t == gb->videodata->animation_section[i].end_t)
+            {
+                free(gb->videodata->animation_section[i].animations);
+                free(&gb->videodata->animation_section[i]);
+            }
+            else
+            {
+                for (int j = 0; j < gb->videodata->animation_section[i].animation_count; j++)
+                {
+                    Animation* a = &gb->videodata->animation_section[i].animations[j];
+                    if (a->start_t == t)
+                    {
+                        a->construct(a);
+                    }
+                }
+                for (int j = 0; j < gb->videodata->animation_section[i].animation_count; j++)
+                {
+                    Animation* a = &gb->videodata->animation_section[i].animations[j];
+                    if (a->start_t <= t && a->end_t >= t)
+                    {
+                        a->preproc(a,t);
+                    }
+                }
+                for (int j = 0; j < gb->videodata->animation_section[i].animation_count; j++)
+                {
+                    Animation* a = &gb->videodata->animation_section[i].animations[j];
+                    if (a->start_t <= t && a->end_t >= t)
+                    {
+                        a->render(a, t);
+                    }
+                }
+                for (int j = 0; j < gb->videodata->animation_section[i].animation_count; j++)
+                {
+                    Animation* a = &gb->videodata->animation_section[i].animations[j];
+                    if (a->start_t <= t && a->end_t >= t)
+                    {
+                        a->postproc(a, t);
+                    }
+                }
+                for (int j = 0; j < gb->videodata->animation_section[i].animation_count; j++)
+                {
+                    Animation* a = &gb->videodata->animation_section[i].animations[j];
+                    if (a->end_t == t)
+                    {
+                        a->free(a);
+                    }
+                }
+            }
+        }    
+    }
 }
 
 LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
@@ -1019,7 +1105,6 @@ void SetupPixelFormat(HDC hdc)
     SetPixelFormat(hdc, pf, &pfd);
 }
 
-
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow)
 {
     WNDCLASSEX wc = {0};
@@ -1037,8 +1122,14 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
         g_szClassName,
         "Window lol",
         WS_OVERLAPPEDWINDOW,
-        CW_USEDEFAULT, CW_USEDEFAULT, 800, 600,
-        NULL, NULL, hInstance, NULL);
+        CW_USEDEFAULT, 
+        CW_USEDEFAULT, 
+        800, 
+        600,
+        NULL, 
+        NULL, 
+        hInstance, 
+        NULL);
     HDC hdc = GetDC(hwnd);      
     SetupPixelFormat(hdc);       
     HGLRC hglrc = wglCreateContext(hdc); 
@@ -1049,9 +1140,6 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
     UpdateWindow(hwnd);
 
     MSG msg;
-    float t = 0;
-    mciSendString("open \"../media/audio/music/untitled.mp3\" type mpegvideo alias mymusic", NULL, 0, NULL);
-    mciSendString("play mymusic repeat", NULL, 0, NULL);
     while (1)
     {
         while (PeekMessage(&msg, NULL, 0, 0, PM_REMOVE))
@@ -1061,16 +1149,6 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
             TranslateMessage(&msg);
             DispatchMessage(&msg);
         }
-        t+=0.0001;
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-        glBegin(GL_TRIANGLES);
-        glColor3f(1,0,0); 
-        glVertex3f(t,-0.5f,0.0f);
-        glColor3f(0,t,0); 
-        glVertex3f(0.5f,-0.5f*t,0.0f);
-        glColor3f(0,0,1); 
-        glVertex3f(0.0f,0.5f,0.0f);
-        glEnd();
         SwapBuffers(hdc);
     }
     cleanup:
