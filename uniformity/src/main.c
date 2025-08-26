@@ -61,6 +61,38 @@ This allow for more useful outputs to functions.
 #define TRI_INIT_MALLOC_FAIL 0x03000000
 #define TRI_NOT_FOUND 0x03000001
 #define ADDING_TRI_REALLOC_FAILURE 0x03000002
+#define PSLG_INIT_MALLOC_ERROR 0x03000003
+#define PSLG_VERTEX_MALLOC_ERROR 0x03000004
+#define PSLG_EDGE_MALLOC_ERROR 0x03000005
+
+
+
+
+
+void print_error(int error)
+{
+    if (!IS_ERROR(error))
+    {
+        return;
+    }
+    switch(error)
+    {
+        case TRI_INIT_MALLOC_FAIL:
+            fprintf(stderr, "Allocating memory when initializing a triangle failed.\n");
+        case TRI_NOT_FOUND:
+            fprintf(stderr, "When running add_triangulation, you inputted a NULL pointer which is very mean of you.\n");
+        case ADDING_TRI_REALLOC_FAILURE:
+            fprintf(stderr, "When adding a triangle to a triangulation (running add_triangle) we failed at reallocating the memory.\n");
+        case PSLG_INIT_MALLOC_ERROR:
+            fprintf(stderr, "When mallocing the PSLG, I failed.\n")
+        case PSLG_VERTEX_MALLOC_ERROR:
+            fprintf(stderr, "Allocating the vertices for the PSLG failed.\n")
+        case PSLG_EDGE_MALLOC_ERROR:
+            fprintf(stderr, "Allocating the edges for the PSLG failed\n");
+        default:
+            fprintf(stderr, "SOMETHING BAD HAPPENED\n")
+    } 
+}
 
 typedef struct 
 {
@@ -251,7 +283,7 @@ void free_triangulation(int* result, Triangulation* triangulation)
     triangulation->triangles = NULL;
     triangulation->triangle_count = 0;
     free(triangulation);              
-    *result = SUCCESS;
+    *result = SUCCESS; // I genuinely could not think of a way for free to fail. 
 }
 
 
@@ -361,54 +393,42 @@ void intersecting_segments(Vec3 a, Vec3 b, Vec3 c, Vec3 d, Vec3* out)
     return;
 }
 
-PSLG* generate_pslg(Vec3* vertices, int vertex_count)
+PSLG* generate_pslg(int* result, Vec3* vertices, int vertex_count)
 {
     PSLG* new = malloc(sizeof(PSLG));
     if(!new)
     {
-        return new;
+        *result = PSLG_INIT_MALLOC_ERROR;
+        return NULL;
     }
     new->vertex_count = vertex_count;
     new->edge_count = vertex_count;
-    new->vertices = malloc(vertex_count * sizeof(Vec3));
+    new->vertices = malloc(BIT_ALIGN(vertex_count) * sizeof(Vec3));
     if (!new->vertices) 
     {
         new->vertex_count = 0;
         new->edge_count = 0;
         new->edges = NULL;
-        return new;
+        *result = PSLG_VERTEX_MALLOC_ERROR;
+        return NULL;
     }
     for (int i = 0; i < vertex_count; i++)
     {
         new->vertices[i] = vertices[i];
     }
 
-    new->edges = malloc(new->edge_count * sizeof(int*));
+    new->edges = malloc(BIT_ALIGN(new->edge_count) * sizeof(int[2]));
     if (!new->edges) 
     {
         free(new->vertices);
         new->vertex_count = 0;
         new->edge_count = 0;
-        return new;
+        *result = PSLG_EDGE_MALLOC_ERROR;
+        return NULL;
     }
 
     for (int i = 0; i < vertex_count; i++)
     {
-        new->edges[i] = malloc(2 * sizeof(int));
-        if (!new->edges[i]) 
-        {
-            for (int j = 0; j < i; j++) 
-            {
-                free(new->edges[j]);
-            }
-            free(new->edges);
-            free(new->vertices);
-            new->vertex_count = 0;
-            new->edge_count = 0;
-            new->edges = NULL;
-            new->vertices = NULL;
-            return new;
-        }
         new->edges[i][0] = i;
         new->edges[i][1] = (i + 1) % vertex_count; 
     }
