@@ -237,7 +237,13 @@ int add_triangle(Triangulation* tri, Vec3 a, Vec3 b, Vec3 c)
         return FAILURE;
     }
 
-    tri->triangles = realloc(tri->triangles, (tri->triangle_count+1) * sizeof(Vec3*) );
+    Vec3** temp_ptr = realloc(tri->triangles, (tri->triangle_count+1) * sizeof(Vec3*) );
+    if (temp_ptr == NULL)
+    {
+        printf("TRI ADD BAD\n");
+        return FAILURE;
+    }
+    tri->triangles = temp_ptr;
     tri->triangles[tri->triangle_count] = malloc(3 * sizeof(Vec3));
     if(!tri->triangles[tri->triangle_count])
     {
@@ -439,16 +445,32 @@ int splitPSLG(PSLG* pslg, int edge1, int edge2)
         return NOOP;
     }
     // TODO: HANDLE REALLOC FAILURE
-    pslg->vertices = realloc(pslg->vertices, sizeof(Vec3) * (pslg->vertex_count + 1));
-    pslg->edges = realloc(pslg->edges, sizeof(int*) * (pslg->edge_count + 2));  
+    {
+        Vec3* temp_ptr = realloc(pslg->vertices, sizeof(Vec3) * (pslg->vertex_count + 1));
+        if (temp_ptr == NULL)
+        {
+            printf("SOB\n");
+            return FAILURE;
+        }
+        pslg->vertices = temp_ptr;  
+    }
+    int** temp_ptr = realloc(pslg->edges, sizeof(int*) * (pslg->edge_count + 2));
+    if (temp_ptr == NULL)
+    {
+        printf("DE\n");
+        return FAILURE;
+    }
+    pslg->edges = temp_ptr;
     pslg->edges[pslg->edge_count] = malloc(2 * sizeof(int));
     if(!pslg->edges[pslg->edge_count])
     {
+        printf("DO\n");
         return FAILURE;
     }
     pslg->edges[pslg->edge_count + 1] = malloc(2 * sizeof(int));
     if(!pslg->edges[pslg->edge_count + 1])
     {
+        printf("asdfasdfasfd\n");
         return FAILURE;
     }
     pslg->vertices[pslg->vertex_count] = out;
@@ -746,11 +768,13 @@ int merge_triangulations(Triangulation** triangulations, int tri_count, Triangul
 // a culmination of a lot of this project
 int triangulate_polyhedra(Polyhedron* poly, Triangulation* result)
 {
+    printf("G\n");
     Triangulation** tris = malloc(poly->face_count * sizeof(Triangulation*));
     if (!tris)
     {
         return FAILURE;
     }
+    printf("DO YOU DIE TODAY\n");
     for (int i = 0; i < poly->face_count; i++)
     {
         Triangulation* t = empty_triangulation();
@@ -763,9 +787,15 @@ int triangulate_polyhedra(Polyhedron* poly, Triangulation* result)
         {
             vertices[j] = poly->vertices[poly->faces[i][j]];
         }
-        generate_triangulation(vertices, poly->face_sizes[i], t);
+        int result = generate_triangulation(vertices, poly->face_sizes[i], t);
+        if (result == FAILURE)
+        {
+            printf("DO YOU YOYO\n");
+            return FAILURE;
+        }
         free(vertices);
         tris[i] = t;
+        printf("fas\n");
     }
     merge_triangulations(tris, poly->face_count, result);
     for(int i = 0; i < poly->face_count; i++)
@@ -968,13 +998,26 @@ int read_vertices (FILE* fin, Polyhedron* poly)
     return 1;
 }
 
-Polyhedron* polyhedra_from_off(FILE* fin)
+Polyhedron* polyhedron_from_off(FILE* fin)
 {
     int nv, nf;
-    read_off_header(fin, &nv, &nf);
+    int result = read_off_header(fin, &nv, &nf);
+    if (result == FAILURE)
+    {
+        return NULL;
+    }
+
     Polyhedron* poly = create_polyhedron(nv, nf);
-    read_vertices(fin, poly);
-    read_faces(fin, poly);
+    result = read_vertices(fin, poly);
+    if (result == FAILURE)
+    {
+        return NULL;
+    }
+    result = read_faces(fin, poly);
+    if (result == FAILURE)
+    {
+        return NULL;
+    }
     return poly;
 }
 // WARNING THIS FUNCTION IS DEEPLY NESTED
@@ -1041,34 +1084,94 @@ void render_gb(GlobalBuffer* gb, int t)
 }
 
 
+float angle = 0.0f;
+
+void draw_tri(Triangulation* tri) {
+    glBegin(GL_TRIANGLES);
+    for (int i = 0; i < tri->triangle_count; i++) {
+        Vec3* t = tri->triangles[i];
+        glColor3f(1.0f, 0.5f, 0.2f);
+        glVertex3f(t[0].x, t[0].y, t[0].z);
+        glVertex3f(t[1].x, t[1].y, t[1].z);
+        glVertex3f(t[2].x, t[2].y, t[2].z);
+    }
+    glEnd();
+}
+
 int main(int argc, char *argv[]) {
     SDL_Init(SDL_INIT_VIDEO);
+
     SDL_GL_SetAttribute(SDL_GL_MULTISAMPLEBUFFERS, 1);
     SDL_GL_SetAttribute(SDL_GL_MULTISAMPLESAMPLES, 4);
-    SDL_Window *win = SDL_CreateWindow(
-        "Me When Triangle",
+
+    SDL_Window *win = SDL_CreateWindow("Rotating Cube",
         SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
         800, 600,
-        SDL_WINDOW_OPENGL | SDL_WINDOW_SHOWN
-    );
+        SDL_WINDOW_OPENGL | SDL_WINDOW_SHOWN);
+
     SDL_GLContext ctx = SDL_GL_CreateContext(win);
-    glEnable(0x809D); 
+    glEnable(0x809D);
+    glEnable(GL_DEPTH_TEST);
+    printf("D\n");
+    FILE* fin = fopen("../media/models/off/gad.off", "r");
+    if(!fin)
+    {
+        printf("DO\n");
+        return 1;
+    }
+    printf("DFDS\n");
+    Polyhedron* poly = polyhedron_from_off(fin);
+    if (poly == NULL) 
+    {
+        printf("DIE\n");
+        return 1;
+    }
+    printf("DFdDS\n");
+
+
+    Triangulation* tri = empty_triangulation();
+    if (tri == NULL)
+    {
+        printf("DO YOU DIE\n");
+        return 1;
+    }
+    printf("DFdddDS\n");
+
+    if(triangulate_polyhedra(poly, tri) == FAILURE)
+    {
+        printf("TODAY YOU MUST DIE\n");
+        return 1;
+    }
+
+    printf("Data: %d\n", tri->triangle_count);
     SDL_Event e;
     int running = 1;
     while (running) {
         while (SDL_PollEvent(&e))
-            if (e.type == SDL_QUIT) running = 0;
+        {
+            if (e.type == SDL_QUIT) 
+            {
+                running = 0;
+            }
+        }
 
-        glClearColor(0.2f, 0.3f, 0.4f, 1.0f);
-        glClear(GL_COLOR_BUFFER_BIT);
+        glClearColor(0.0f,0.0f,0.0f,1.0f);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-        glBegin(GL_TRIANGLES);
-            glColor3f(1, 0, 0); glVertex2f(-0.5f, -0.5f);
-            glColor3f(0, 1, 0); glVertex2f(0.5f, -0.5f);
-            glColor3f(0, 0, 1); glVertex2f(0.0f, 0.5f);
-        glEnd();
+        glMatrixMode(GL_PROJECTION);
+        glLoadIdentity();
+        float aspect = 800.0f/600.0f;
+        glFrustum(-1*aspect, 1*aspect, -1, 1, 1, 10);
+
+        glMatrixMode(GL_MODELVIEW);
+        glLoadIdentity();
+        glTranslatef(0,0,-3);
+        glRotatef(angle, 1, 1, 0);
+
+        draw_tri(tri);
 
         SDL_GL_SwapWindow(win);
+        angle += 0.1f;
     }
 
     SDL_GL_DeleteContext(ctx);
