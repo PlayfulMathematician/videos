@@ -32,8 +32,6 @@ This is a disorganized mess right now, but notice most functions return an int.
 An int in the Result enum. 
 This will be restructured so the result is inserted as a parameter.
 This allow for more useful outputs to functions.
-Also MEMORY ALLOCATION IS TERRIBLE.
-I hate C
 */
 #include <stdio.h>
 #include <stdlib.h>
@@ -46,52 +44,23 @@ I hate C
 #include <GL/gl.h>
 #include <stdio.h>
 #define EPSILON 0.0001
-
-enum Result
-{
-    FAILURE,
-    SUCCESS,
-    NOOP
-};
-
-const char g_szClassName[] = "MyWindowClass";
-
-typedef union 
-{
-    struct 
-    { 
-        uint8_t r;
-        uint8_t g;
-        uint8_t b;
-    };
-    uint8_t c[3];
-} 
-Color;
-
-Color make_color3(uint8_t r, uint8_t g, uint8_t b) 
-{
-    Color col = { .r = r, .g = g, .b = b };
-    return col;
-}
-
-Color make_color_array(uint8_t arr[3]) 
-{
-    Color col;
-    col.c[0] = arr[0];
-    col.c[1] = arr[1];
-    col.c[2] = arr[2];
-    return col;
-}
-
-void glColor(Color c) 
-{
-    glColor3f(c.r / 255.0f, c.g / 255.0f, c.b / 255.0f);
-}
-
-void print_color(Color c) 
-{
-    printf("Color: R=%u, G=%u, B=%u\n", c.r, c.g, c.b);
-}
+// this handles bit alignment to use less mallocs
+#define BIT_IGNORE 4
+#define BIT_ALIGN(x) (((x) + ((1 << BIT_IGNORE) - 1)) & ~((1 << BIT_IGNORE) - 1))
+#define REALIGN(a, b) BIT_ALIGN((a)) != BIT_ALIGN((b)) 
+// error codes
+#define STATUS_TYPE_SHIFT 24
+#define STATUS_TYPE_MASK  0xFF000000  
+#define STATUS_INFO_MASK  0x00FFFFFF  
+#define SUCCESS 0x00
+#define NOOP 0x01
+#define NONFATAL 0x02 // consider removing
+#define FATAL 0x03
+#define STATUS_TYPE(code) (((code) & STATUS_TYPE_MASK) >> STATUS_TYPE_SHIFT)
+#define IS_ERROR(x) ((STATUS_TYPE((x)) == FATAL) & (STATUS_TYPE((x)) == NONFATAL))
+#define TRI_INIT_MALLOC_FAIL 0x03000000
+#define TRI_NOT_FOUND 0x03000001
+#define ADDING_TRI_REALLOC_FAILURE 0x03000002
 
 typedef struct 
 {
@@ -112,7 +81,7 @@ Polyhedron;
 typedef struct 
 {
     Vec3* vertices;
-    int** edges;
+    int (*edges)[2]; // diametrically opposed foes, previously closed bros
     int vertex_count;
     int edge_count;
 } 
@@ -120,7 +89,7 @@ PSLG;
 
 typedef struct
 {
-    Vec3** triangles;
+    Vec3 (*triangles)[3];
     int triangle_count;
 }
 Triangulation;
@@ -141,24 +110,22 @@ Dumpster;
 
 typedef struct Animation Animation;
 typedef struct GlobalBuffer GlobalBuffer;
+typedef struct VideoData VideoData;  
+typedef struct AnimationSection AnimationSection;  
+
+
 
 struct Animation
 {
     int start_t;
     int end_t;
-    void (*construct)(Animation*);
+    void (*construct)(struct Animation*);
     void (*preproc)(struct Animation*, int t);
     void (*render)(struct Animation*, int t);
     void (*postproc)(struct Animation*, int t);
     void (*free)(struct Animation*);
     Dumpster dumpster;
 };
-
-
-
-typedef struct AnimationSection AnimationSection;  // forward declaration
-typedef struct VideoData VideoData;  
-typedef struct GlobalBuffer GlobalBuffer;  
 
 
 struct AnimationSection
@@ -198,31 +165,13 @@ struct GlobalBuffer
     VideoData* videodata;
 };
 
-typedef struct {
-    float eye[3];
-    float center[3];
-    float up[3];
-    float fov;
-    float aspect;
-    float nearZ;
-    float farZ;
-    float lightPos[4];
-    float ambient[4];
-    float diffuse[4];
-    float specular[4];
-    float matAmbient[4];
-    float matDiffuse[4];
-    float matSpecular[4];
-    float shininess;
-} CameraLighting;
-
-
-Triangulation* empty_triangulation()
+Triangulation* empty_triangulation(int* result)
 {
     Triangulation* tri = malloc(sizeof(Triangulation));
     if (!tri)
-    {
-        return NULL;
+    {   
+        *result = TRI_INIT_MALLOC_FAIL;
+        return NULL; 
     }
     tri->triangle_count = 0;
     tri->triangles = NULL;
@@ -230,31 +179,81 @@ Triangulation* empty_triangulation()
 
 }
 
-int add_triangle(Triangulation* tri, Vec3 a, Vec3 b, Vec3 c)
+void add_triangle(int* result, Triangulation* tri, Vec3 a, Vec3 b, Vec3 c)
 {
     if (!tri) 
     {
-        return FAILURE;
+        *result = TRI_NOT_FOUND;
+        return;
     }
 
-    Vec3** temp_ptr = realloc(tri->triangles, (tri->triangle_count+1) * sizeof(Vec3*) );
-    if (temp_ptr == NULL)
+    if (REALIGN(tri->triangle_count, tri->triangle_count + 1))
     {
-        printf("TRI ADD BAD\n");
-        return FAILURE;
-    }
-    tri->triangles = temp_ptr;
-    tri->triangles[tri->triangle_count] = malloc(3 * sizeof(Vec3));
-    if(!tri->triangles[tri->triangle_count])
-    {
-        return FAILURE;
+        int new_capacity = BIT_ALIGN(tri->triangle_count + 1); 
+        Vec3 (*temp)[3] = realloc(tri->triangles, new_capacity * sizeof(Vec3[3]));
+        if (!temp)
+        {
+            *result = ADDING_TRI_REALLOC_FAILURE;
+            return;
+        }
+        tri->triangles = temp;
     }
     tri->triangles[tri->triangle_count][0] = a;
     tri->triangles[tri->triangle_count][1] = b;
     tri->triangles[tri->triangle_count][2] = c;
     tri->triangle_count++;
-    return SUCCESS;
+    *result = SUCCESS;
 }
+
+void merge_triangulations(int* result, Triangulation** triangulations, int tri_count, Triangulation* output)
+{
+    
+    Triangulation* e = empty_triangulation();
+    if (e == NULL)
+    {
+        *result = TRI_INIT_MALLOC_FAIL;
+        return;
+    }
+    output->triangle_count = e->triangle_count;
+    output->triangles = e->triangles;
+    /*
+        Note we use free instead of free_triangulation because
+        result->triangles points to the same memory as e->triangles and 
+        free_triangulation(e) would free e->triangles.
+    */
+    free(e);
+    
+    for (int i = 0; i < tri_count; i++)
+    {
+        for (int j = 0; j < triangulations[i]->triangle_count; j++)
+        {
+            int* out;
+            add_triangle(
+                out,
+                output, 
+                triangulations[i]->triangles[j][0],
+                triangulations[i]->triangles[j][1],
+                triangulations[i]->triangles[j][2],
+            );
+            if (IS_ERROR(*out))
+            {
+                *result = *out;
+                return;
+            }
+        }
+    }
+    *result = SUCCESS;
+}
+
+void free_triangulation(int* result, Triangulation* triangulation)
+{
+    free(triangulation->triangles);   
+    triangulation->triangles = NULL;
+    triangulation->triangle_count = 0;
+    free(triangulation);              
+    *result = SUCCESS;
+}
+
 
 Vec3 add_vec3(Vec3 a, Vec3 b)
 {
@@ -282,6 +281,84 @@ Vec3 subtract_vec3(Vec3 a, Vec3 b)
 Vec3 lerp_vec3(Vec3 a, Vec3 b, float t)
 {
     return add_vec3(a, multiply_vec3(subtract_vec3(b, a), t));
+}
+
+void intersecting_segments(Vec3 a, Vec3 b, Vec3 c, Vec3 d, Vec3* out)
+{
+    
+    if (a.x == b.x && a.y == b.y && c.x == d.x && c.y == d.y)
+    {
+        return;
+    }
+    float tx; 
+    float ty;
+    int vertical = 0;
+    if (a.x == b.x && a.y == b.y)
+    {
+        tx = (a.x - c.x) / (d.x - c.x);
+        ty = (a.y - c.y) / (d.y - c.y);
+        vertical = 1;
+    }
+    if (c.x == d.x && c.y == d.y)
+    {
+        tx = (c.x - a.x) / (b.x - a.x);
+        ty = (c.y - a.y) / (b.y - a.y);
+        vertical = 2;
+    }
+    if (vertical > 0)
+    {
+        if (tx < 0 || tx > 1)
+        {
+            return;
+        }
+        if (ty < 0 || ty > 1)
+        {
+            return;
+        }
+        float t_avg;
+        if (fabs(tx - ty) < EPSILON)
+        {
+            t_avg = (tx + ty) / 2;
+        }
+        else
+        {
+            return;
+        }
+        if (vertical == 1)
+        {
+            *out = lerp_vec3(c, d, t_avg);
+        }
+        else if (vertical == 2)
+        {
+            *out = lerp_vec3(a, b, t_avg);
+        }
+        return 1;
+    }
+    float denom = (a.x - b.x)*(c.y - d.y) - (a.y - b.y)*(c.x - d.x);
+
+    if (fabs(denom) < EPSILON)
+    {
+        return;
+    }
+    float t = ((a.x - c.x)*(c.y - d.y) - (a.y - c.y)*(c.x-d.x)) / denom;
+    float u = -((a.x - b.x)*(a.y - c.y) - (a.y - b.y)*(a.x-c.x)) / denom;
+    if (t < 0 || t > 1)
+    {
+        return 0;
+    }
+    if (u < 0 || u > 1)
+    {
+        return;
+    }
+
+    Vec3 v1 = lerp_vec3(a, b, t);
+    Vec3 v2 = lerp_vec3(c, d, u);
+    if (fabs(v1.z - v2.z) < EPSILON)
+    {
+        *out = lerp_vec3(v1, v2, 0.5f);
+        return;
+    }
+    return;
 }
 
 PSLG* generate_pslg(Vec3* vertices, int vertex_count)
@@ -337,84 +414,6 @@ PSLG* generate_pslg(Vec3* vertices, int vertex_count)
     }
 
     return new;
-}
-
-int intersecting_segments(Vec3 a, Vec3 b, Vec3 c, Vec3 d, Vec3* out)
-{
-    
-    if (a.x == b.x && a.y == b.y && c.x == d.x && c.y == d.y)
-    {
-        return 0;
-    }
-    float tx; 
-    float ty;
-    int vertical = 0;
-    if (a.x == b.x && a.y == b.y)
-    {
-        tx = (a.x - c.x) / (d.x - c.x);
-        ty = (a.y - c.y) / (d.y - c.y);
-        vertical = 1;
-    }
-    if (c.x == d.x && c.y == d.y)
-    {
-        tx = (c.x - a.x) / (b.x - a.x);
-        ty = (c.y - a.y) / (b.y - a.y);
-        vertical = 2;
-    }
-    if (vertical > 0)
-    {
-        if (tx < 0 || tx > 1)
-        {
-            return 0;
-        }
-        if (ty < 0 || ty > 1)
-        {
-            return 0;
-        }
-        float t_avg;
-        if (fabs(tx - ty) < EPSILON)
-        {
-            t_avg = (tx + ty) / 2;
-        }
-        else
-        {
-            return 0;
-        }
-        if (vertical == 1)
-        {
-            *out = lerp_vec3(c, d, t_avg);
-        }
-        else if (vertical == 2)
-        {
-            *out = lerp_vec3(a, b, t_avg);
-        }
-        return 1;
-    }
-    float denom = (a.x - b.x)*(c.y - d.y) - (a.y - b.y)*(c.x - d.x);
-
-    if (fabs(denom) < EPSILON)
-    {
-        return 0;
-    }
-    float t = ((a.x - c.x)*(c.y - d.y) - (a.y - c.y)*(c.x-d.x)) / denom;
-    float u = -((a.x - b.x)*(a.y - c.y) - (a.y - b.y)*(a.x-c.x)) / denom;
-    if (t < 0 || t > 1)
-    {
-        return 0;
-    }
-    if (u < 0 || u > 1)
-    {
-        return 0;
-    }
-
-    Vec3 v1 = lerp_vec3(a, b, t);
-    Vec3 v2 = lerp_vec3(c, d, u);
-    if (fabs(v1.z - v2.z) < EPSILON)
-    {
-        *out = lerp_vec3(v1, v2, 0.5f);
-        return 1;
-    }
-    return 0;
 }
 int splitPSLG(PSLG* pslg, int edge1, int edge2)
 {
@@ -553,16 +552,7 @@ PSLGTriangulation* create_pslg_triangulation(PSLG* pslg, int* result)
     return pslgtri;
 }
 
-int free_triangulation(Triangulation* triangulation)
-{
-    for(int i = 0; i < triangulation->triangle_count; i++)
-    {
-        free(triangulation->triangles[i]);
-    }
-    free(triangulation->triangles);
-    free(triangulation);
-    return SUCCESS;
-}
+
 
 int attack_vertex(PSLGTriangulation* pslgtri, int vertex_idx)
 {   
@@ -727,41 +717,6 @@ int generate_triangulation(Vec3* vertices, int vertex_count, Triangulation* tri)
     free_pslg(pslgtri->pslg);
     free_triangulation(pslgtri->triangulation);
     free(pslgtri);
-    return SUCCESS;
-}
-
-int merge_triangulations(Triangulation** triangulations, int tri_count, Triangulation* result)
-{
-    Triangulation* e = empty_triangulation();
-    if (e == NULL)
-    {
-        return FAILURE;
-    }
-    result->triangle_count = e->triangle_count;
-    result->triangles = e->triangles;
-    /*
-        Note we use free instead of free_triangulation because
-        result->triangles points to the same memory as e->triangles and 
-        free_triangulation(e) would free e->triangles.
-    */
-    free(e);
-    
-    for (int i = 0; i < tri_count; i++)
-    {
-        for (int j = 0; j < triangulations[i]->triangle_count; j++)
-        {
-            int out = add_triangle(
-                result, 
-                triangulations[i]->triangles[j][0],
-                triangulations[i]->triangles[j][1],
-                triangulations[i]->triangles[j][2]
-            );
-            if (out == FAILURE)
-            {
-                return FAILURE;
-            }
-        }
-    }
     return SUCCESS;
 }
 
