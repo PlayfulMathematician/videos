@@ -38,7 +38,6 @@ This allow for more useful outputs to functions.
 #include <string.h>
 #include <math.h>
 #include <stdint.h>
-#include <windows.h>
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_mixer.h>
 #include <GL/gl.h>
@@ -57,7 +56,7 @@ This allow for more useful outputs to functions.
 #define NONFATAL 0x02 // consider removing
 #define FATAL 0x03
 #define STATUS_TYPE(code) (((code) & STATUS_TYPE_MASK) >> STATUS_TYPE_SHIFT)
-#define IS_ERROR(x) ((STATUS_TYPE((x)) == FATAL) & (STATUS_TYPE((x)) == NONFATAL))
+#define IS_A_ERROR(x) ((STATUS_TYPE((x)) == FATAL) || (STATUS_TYPE((x)) == NONFATAL))
 #define TRI_INIT_MALLOC_FAIL 0x03000000
 #define TRI_NOT_FOUND 0x03000001
 #define ADDING_TRI_REALLOC_FAILURE 0x03000002
@@ -77,7 +76,7 @@ This allow for more useful outputs to functions.
 
 void print_error(int error)
 {
-    if (!IS_ERROR(error))
+    if (!IS_A_ERROR(error))
     {
         return;
     }
@@ -85,24 +84,34 @@ void print_error(int error)
     {
         case TRI_INIT_MALLOC_FAIL:
             fprintf(stderr, "Allocating memory when initializing a triangle failed.\n");
+            break;
         case TRI_NOT_FOUND:
             fprintf(stderr, "When running add_triangulation, you inputted a NULL pointer which is very mean of you.\n");
+            break;
         case ADDING_TRI_REALLOC_FAILURE:
             fprintf(stderr, "When adding a triangle to a triangulation (running add_triangle) we failed at reallocating the memory.\n");
+            break;
         case PSLG_INIT_MALLOC_ERROR:
-            fprintf(stderr, "When mallocing the PSLG, I failed.\n")
+            fprintf(stderr, "When mallocing the PSLG, I failed.\n");
+            break;
         case PSLG_VERTEX_MALLOC_ERROR:
-            fprintf(stderr, "Allocating the vertices for the PSLG failed.\n")
+            fprintf(stderr, "Allocating the vertices for the PSLG failed.\n");
+            break;
         case PSLG_EDGE_MALLOC_ERROR:
             fprintf(stderr, "Allocating the edges for the PSLG failed\n");
+            break;
         case PSLG_EDGE_SPLIT_VERTEX_REALLOC_ERROR:
-            fprintf(stderr, "When splitting a pslg at two edges, reallocating the space for the vertices failed.");
+            fprintf(stderr, "When splitting a pslg at two edges, reallocating the space for the vertices failed.\n");
+            break;
         case PSLG_EDGE_SPLIT_EDGE_REALLOC_ERROR:
-            fprintf(stderr, "When splitting a pslg at two edges, reallocating the space for the edge failed.");
+            fprintf(stderr, "When splitting a pslg at two edges, reallocating the space for the edge failed.\n");
+            break;
         case PSLG_TRIANGULATION_INIT_MALLOC_ERROR:
-            fprintf(stderr, "When creating a pslg triangulation, allocating memory for the pslg triangulation failed.";)
+            fprintf(stderr, "When creating a pslg triangulation, allocating memory for the pslg triangulation failed.\n");
+            break;
         default:
-            fprintf(stderr, "SOMETHING BAD HAPPENED\n")
+            fprintf(stderr, "SOMETHING BAD HAPPENED\n");
+            break;
     } 
 }
 
@@ -251,8 +260,8 @@ void add_triangle(int* result, Triangulation* tri, Vec3 a, Vec3 b, Vec3 c)
 
 void merge_triangulations(int* result, Triangulation** triangulations, int tri_count, Triangulation* output)
 {
-    
-    Triangulation* e = empty_triangulation();
+    int* a;
+    Triangulation* e = empty_triangulation(a);
     if (e == NULL)
     {
         *result = TRI_INIT_MALLOC_FAIL;
@@ -272,14 +281,15 @@ void merge_triangulations(int* result, Triangulation** triangulations, int tri_c
         for (int j = 0; j < triangulations[i]->triangle_count; j++)
         {
             int* out;
+            *out = 0;
             add_triangle(
                 out,
                 output, 
                 triangulations[i]->triangles[j][0],
                 triangulations[i]->triangles[j][1],
-                triangulations[i]->triangles[j][2],
+                triangulations[i]->triangles[j][2]
             );
-            if (IS_ERROR(*out))
+            if (IS_A_ERROR(*out))
             {
                 *result = *out;
                 return;
@@ -327,12 +337,12 @@ Vec3 lerp_vec3(Vec3 a, Vec3 b, float t)
     return add_vec3(a, multiply_vec3(subtract_vec3(b, a), t));
 }
 
-void intersecting_segments(Vec3 a, Vec3 b, Vec3 c, Vec3 d, Vec3* out)
+int intersecting_segments(Vec3 a, Vec3 b, Vec3 c, Vec3 d, Vec3* out)
 {
     
     if (a.x == b.x && a.y == b.y && c.x == d.x && c.y == d.y)
     {
-        return;
+        return 0;
     }
     float tx; 
     float ty;
@@ -353,11 +363,11 @@ void intersecting_segments(Vec3 a, Vec3 b, Vec3 c, Vec3 d, Vec3* out)
     {
         if (tx < 0 || tx > 1)
         {
-            return;
+            return 0;
         }
         if (ty < 0 || ty > 1)
         {
-            return;
+            return 0;
         }
         float t_avg;
         if (fabs(tx - ty) < EPSILON)
@@ -366,7 +376,7 @@ void intersecting_segments(Vec3 a, Vec3 b, Vec3 c, Vec3 d, Vec3* out)
         }
         else
         {
-            return;
+            return 0;
         }
         if (vertical == 1)
         {
@@ -382,7 +392,7 @@ void intersecting_segments(Vec3 a, Vec3 b, Vec3 c, Vec3 d, Vec3* out)
 
     if (fabs(denom) < EPSILON)
     {
-        return;
+        return 0;
     }
     float t = ((a.x - c.x)*(c.y - d.y) - (a.y - c.y)*(c.x-d.x)) / denom;
     float u = -((a.x - b.x)*(a.y - c.y) - (a.y - b.y)*(a.x-c.x)) / denom;
@@ -392,7 +402,7 @@ void intersecting_segments(Vec3 a, Vec3 b, Vec3 c, Vec3 d, Vec3* out)
     }
     if (u < 0 || u > 1)
     {
-        return;
+        return 0;
     }
 
     Vec3 v1 = lerp_vec3(a, b, t);
@@ -400,9 +410,9 @@ void intersecting_segments(Vec3 a, Vec3 b, Vec3 c, Vec3 d, Vec3* out)
     if (fabs(v1.z - v2.z) < EPSILON)
     {
         *out = lerp_vec3(v1, v2, 0.5f);
-        return;
+        return 1;
     }
-    return;
+    return 0;
 }
 
 PSLG* generate_pslg(int* result, Vec3* vertices, int vertex_count)
@@ -466,21 +476,22 @@ void splitPSLG(int* result, PSLG* pslg, int edge1, int edge2)
     Vec3 v2 = pslg->vertices[pslg->edges[edge1][1]];
     Vec3 v3 = pslg->vertices[pslg->edges[edge2][0]];
     Vec3 v4 = pslg->vertices[pslg->edges[edge2][1]];
-    intersecting_segments(
-        v1,
-        v2,
-        v3,
-        v4,
-        &out
-    );
-    if (out == NULL)
+    int intersection = 
+        intersecting_segments(
+            v1,
+            v2,
+            v3,
+            v4,
+            &out
+        );
+    if (intersection == 1)
     {
         *result = NOOP;
         return;
     }
-    if (REALIGN(pslg->vertices, pslg->vertices + 1))
+    if (REALIGN(pslg->vertex_count, pslg->vertex_count + 1))
     {
-        Vec3* temp_ptr = realloc(pslg->vertices, sizeof(Vec3) * BIT_ALIGN(pslg->vertices + 1));
+        Vec3* temp_ptr = realloc(pslg->vertices, sizeof(Vec3) * BIT_ALIGN(pslg->vertex_count + 1));
         if (temp_ptr == NULL)
         {
             *result = PSLG_EDGE_SPLIT_VERTEX_REALLOC_ERROR;
@@ -490,7 +501,7 @@ void splitPSLG(int* result, PSLG* pslg, int edge1, int edge2)
     }
     if (REALIGN(pslg->edge_count, pslg->edge_count + 2))
     {
-        int[2]* temp_ptr = realloc(pslg->edges, sizeof(int[2]) * BIT_ALIGN(pslg->edge_count + 2));
+        int (*temp_ptr)[2] = realloc(pslg->edges, sizeof(int[2]) * BIT_ALIGN(pslg->edge_count + 2));
         if (temp_ptr == NULL)
         {
             *result = PSLG_EDGE_SPLIT_EDGE_REALLOC_ERROR;
@@ -516,7 +527,7 @@ void remove_single_edge(int* result, PSLG* pslg)
     {
         for(int j = 0; j < pslg->edge_count; j++)
         {
-            splitPSLG(pslg, i, j, result);
+            splitPSLG(result, pslg, i, j);
             if(*result == NOOP)
             {
                 continue;
@@ -535,8 +546,9 @@ void split_entirely(int* result, PSLG* pslg)
         if(*result == NOOP) 
         {
             *result = SUCCESS;
+            return;
         }
-        if(IS_ERROR(*result))
+        if(IS_A_ERROR(*result))
         {
             return;
         }
@@ -551,7 +563,7 @@ void free_pslg(PSLG* pslg)
     free(pslg);
 }
 
-PSLGTriangulation* create_pslg_triangulation(int* result, PSLG* pslg, int* result)
+PSLGTriangulation* create_pslg_triangulation(int* result, PSLG* pslg)
 {
     PSLGTriangulation* pslgtri = malloc(sizeof(PSLGTriangulation));
     if (!pslgtri)
@@ -560,7 +572,7 @@ PSLGTriangulation* create_pslg_triangulation(int* result, PSLG* pslg, int* resul
         return NULL;
     }
     pslgtri->triangulation = empty_triangulation(result);
-    if (IS_ERROR(result))
+    if (IS_A_ERROR(*result))
     {
         free(pslgtri);
         return NULL;
@@ -572,7 +584,7 @@ PSLGTriangulation* create_pslg_triangulation(int* result, PSLG* pslg, int* resul
 
 
 
-int attack_vertex(PSLGTriangulation* pslgtri, int vertex_idx)
+void attack_vertex(int* result, PSLGTriangulation* pslgtri, int vertex_idx)
 {   
     PSLG* pslg = pslgtri->pslg;
     Triangulation* tri = pslgtri->triangulation;
@@ -590,7 +602,8 @@ int attack_vertex(PSLGTriangulation* pslgtri, int vertex_idx)
             d++;
             if (d > 2)
             {
-                return NOOP;
+                *result = NOOP;
+                return;
             }
             if (d > 1)
             {
@@ -604,7 +617,8 @@ int attack_vertex(PSLGTriangulation* pslgtri, int vertex_idx)
     }
     if (d != 2)
     {
-        return NOOP;
+        *result = NOOP;
+        return;
     }
     int v1 = pslg->edges[e1][0];
     int v2 = pslg->edges[e2][0];
@@ -618,7 +632,11 @@ int attack_vertex(PSLGTriangulation* pslgtri, int vertex_idx)
         v2 = pslg->edges[e2][1];
         v3 = pslg->edges[e2][0];
     }
-    add_triangle(tri, pslg->vertices[v1], pslg->vertices[v2], pslg->vertices[v3]);
+    add_triangle(result, tri, pslg->vertices[v1], pslg->vertices[v2], pslg->vertices[v3]);
+    if (IS_A_ERROR(*result))
+    {
+        return;
+    }
     int e3_exists = 0;
     for(int i = 0; i < pslg->edge_count; i++)
     {
@@ -632,49 +650,10 @@ int attack_vertex(PSLGTriangulation* pslgtri, int vertex_idx)
             break;
         }
     }
-    free(pslg->edges[e1]);
-    free(pslg->edges[e2]);
-    int** temp_ptr;
-    int ecount;
-    if(e3_exists)
-    {
-        ecount = (pslg->edge_count - 1);
-    }
-    else
-    {
-        ecount = (pslg->edge_count - 2);
-    }
-    temp_ptr = malloc(ecount * sizeof(int*));
-    if (!temp_ptr)
-    {
-        return FAILURE;
-    }
-    int ei = 0;
-    for(int i = 0; i < pslg->edge_count; i++)
-    {
-        if(i == e2 || i == e1)
-        {
-            continue;
-        }
-        temp_ptr[ei] = pslg->edges[i];
-        ei++;
-    }
-    if(!e3_exists)
-    {
-        temp_ptr[ei] = malloc(2 * sizeof(int));
-        if (!temp_ptr[ei])
-        {
-            return FAILURE; // i am so tired of checking if malloc fails JUST WORK
-        }
-        temp_ptr[ei][0] = v1;
-        temp_ptr[ei][1] = v2;
-    }
-    free(pslg->edges);
-    pslg->edges = temp_ptr;
-    pslg->edge_count = ecount;
-    return SUCCESS;
+    // so e3_exists
+    // handle it
 }
-
+/*
 int attack_single_vertex(PSLGTriangulation* pslgtri)
 {
     for(int i = 0; i < pslgtri->pslg->vertex_count; i++)
@@ -1150,4 +1129,9 @@ int main(int argc, char *argv[]) {
     SDL_GL_DeleteContext(ctx);
     SDL_DestroyWindow(win);
     SDL_Quit();
+}
+*/
+int main(int argc, char* argv[])
+{
+    return 0;
 }
