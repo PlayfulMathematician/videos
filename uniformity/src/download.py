@@ -44,7 +44,7 @@ def e(url, depth=3):
     
 def main(): 
     try:
-        os.mkdir("../media/models/off")
+        os.mkdir("../media/models")
     except Exception as qa:
         pass
     with open("../media/models/modellist.json", "r") as f:
@@ -55,7 +55,7 @@ def main():
         if z[1] not in contributors:
             contributors.append(z[1])
 
-        with open("../media/models/off/" + i[1], "w") as q:
+        with open("../media/models/" + i[1], "w") as q:
             j = requests.get("https:"+z[0], headers=headers)
             j.raise_for_status()
             q.write(j.text)
