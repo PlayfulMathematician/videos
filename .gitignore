@@ -15,4 +15,4 @@ __pycache__
 # Thumbnails
 Thumbs.db
 *.dll
-uniformity/media/models/off
+uniformity/src/docs

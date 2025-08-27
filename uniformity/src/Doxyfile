@@ -1,0 +1,22 @@
+PROJECT_NAME           = "Canim"
+PROJECT_NUMBER         = 0.1
+INPUT                  = main.c
+FILE_PATTERNS          = *.c
+RECURSIVE              = NO
+
+JAVADOC_AUTOBRIEF      = NO
+MULTILINE_CPP_IS_BRIEF = NO
+QT_AUTOBRIEF           = NO
+
+JAVADOC_BANNER         = NO
+
+EXTRACT_ALL            = YES
+EXTRACT_PRIVATE        = YES
+EXTRACT_STATIC         = YES
+
+GENERATE_HTML          = YES
+GENERATE_LATEX         = YES
+USE_PDFLATEX           = YES
+LATEX_BATCHMODE        = NO
+PDF_HYPERLINKS         = YES
+OUTPUT_DIRECTORY       = docs

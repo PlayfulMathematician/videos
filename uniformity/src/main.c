@@ -1,3 +1,24 @@
+/// @file main.c
+/// @brief Core single-file engine for polyhedra animation.
+/// @details
+/// Sections:
+/// - OpenGL/SDL2 runtime (Win32 + OpenGL)
+/// - PSLG generation and splitting
+/// - Triangulation storage & merge helpers
+/// - OFF parsing
+/// - Animation structs & callbacks
+///
+/// Most functions return a status code; errors are those whose high byte
+/// maps to NONFATAL or FATAL (see macros).
+///
+/// @author
+///   PlayfulMathematician
+/// @version 0.1
+/// @date 2025-08-27
+/// @license
+///   AGPL-3.0-or-later
+/* SPDX-License-Identifier: AGPL-3.0-or-later */
+
 /*
     main.c - A program that handles most things
     Copyright (C) 2025 PlayfulMathematician
@@ -14,24 +35,6 @@
 
     You should have received a copy of the GNU Affero General Public License
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
-
-*/
-
-
-/*
-Hello, main.c contains about a thousand lines of code pertaining to many things that seem disconnected. 
-Let me explain what this file is actually for. 
-I am making an animation engine in C. It will animate polyhedra.
-Thus there are like 4 main sections of code:
-    OpenGL+Win32
-    Polyhedra Triangulation
-    OFF Parsing
-    Animation Structs (mostly boilerplate)
-
-This is a disorganized mess right now, but notice most functions return an int. 
-An int in the Result enum. 
-This will be restructured so the result is inserted as a parameter.
-This allow for more useful outputs to functions.
 */
 #include <stdio.h>
 #include <stdlib.h>
@@ -42,44 +45,62 @@ This allow for more useful outputs to functions.
 #include <SDL2/SDL_mixer.h>
 #include <GL/gl.h>
 #include <stdio.h>
+/// @def EPSILON
+/// @brief Tolerance for floating-point comparisons.
 #define EPSILON 0.0001
-// this handles bit alignment to use less mallocs
+
+/// @def BIT_IGNORE
+/// @brief Alignment granularity in bits (round up to 2^BIT_IGNORE).
 #define BIT_IGNORE 4
+
+/// @def BIT_ALIGN(x)
+/// @brief Round x up to nearest aligned multiple.
 #define BIT_ALIGN(x) (((x) + ((1 << BIT_IGNORE) - 1)) & ~((1 << BIT_IGNORE) - 1))
+
+/// @def REALIGN(a,b)
+/// @brief True if a and b land in different aligned capacity buckets.
 #define REALIGN(a, b) BIT_ALIGN((a)) != BIT_ALIGN((b)) 
-// error codes
+
+// status code helpers
 #define STATUS_TYPE_SHIFT 24
 #define STATUS_TYPE_MASK  0xFF000000  
 #define STATUS_INFO_MASK  0x00FFFFFF  
+
+/// @brief Operation succeeded.
 #define SUCCESS 0x00
+/// @brief No operation performed.
 #define NOOP 0x01
-#define NONFATAL 0x02 // consider removing
+/// @brief Non-fatal error.
+#define NONFATAL 0x02
+/// @brief Fatal error.
 #define FATAL 0x03
+
+/// @brief Extracts the status type (SUCCESS/NOOP/NONFATAL/FATAL).
 #define STATUS_TYPE(code) (((code) & STATUS_TYPE_MASK) >> STATUS_TYPE_SHIFT)
+
+/// @brief True if code is an error (NONFATAL or FATAL).
 #define IS_A_ERROR(x) ((STATUS_TYPE((x)) == FATAL) || (STATUS_TYPE((x)) == NONFATAL))
-#define TRI_INIT_MALLOC_FAIL 0x03000000
-#define TRI_NOT_FOUND 0x03000001
-#define ADDING_TRI_REALLOC_FAILURE 0x03000002
-#define PSLG_INIT_MALLOC_ERROR 0x03000003
-#define PSLG_VERTEX_MALLOC_ERROR 0x03000004
-#define PSLG_EDGE_MALLOC_ERROR 0x03000005
-#define PSLG_EDGE_SPLIT_VERTEX_REALLOC_ERROR 0x03000006
-#define PSLG_EDGE_SPLIT_EDGE_REALLOC_ERROR 0x03000007
-#define PSLG_TRIANGULATION_INIT_MALLOC_ERROR 0x03000008
-#define PSLG_ATTACK_TEMP_EDGES_MALLOC_ERROR 0x03000009
-#define PSLG_ATTACK_EDGE_REALLOCATION_ERROR 0x0300000a
 
-
-
-
-
-
-
-
-
+// Error codes
+#define TRI_INIT_MALLOC_FAIL 0x03000000   ///< Triangulation malloc failed.
+#define TRI_NOT_FOUND 0x03000001          ///< Triangulation pointer was NULL.
+#define ADDING_TRI_REALLOC_FAILURE 0x03000002 ///< Realloc failed while adding triangle.
+#define PSLG_INIT_MALLOC_ERROR 0x03000003     ///< PSLG struct allocation failed.
+#define PSLG_VERTEX_MALLOC_ERROR 0x03000004   ///< Vertex allocation failed.
+#define PSLG_EDGE_MALLOC_ERROR 0x03000005     ///< Edge allocation failed.
+#define PSLG_EDGE_SPLIT_VERTEX_REALLOC_ERROR 0x03000006 ///< Realloc failed in split (vertices).
+#define PSLG_EDGE_SPLIT_EDGE_REALLOC_ERROR 0x03000007   ///< Realloc failed in split (edges).
+#define PSLG_TRIANGULATION_INIT_MALLOC_ERROR 0x03000008 ///< Coupled PSLG+tri malloc failed.
+#define PSLG_ATTACK_TEMP_EDGES_MALLOC_ERROR 0x03000009  ///< Attack: malloc for temp edges failed.
+#define PSLG_ATTACK_EDGE_REALLOCATION_ERROR 0x0300000a  ///< Attack: realloc failed on edges.
+/** 
+ * @brief Print out the error 
+ * @param error The error the need be printed.
+ * @return I will not return anything 
+*/
 void print_error(int error)
 {
-    if (!IS_A_ERROR(error))
+    if (!IS_AN_ERROR(error))
     {
         return;
     }
@@ -124,34 +145,93 @@ void print_error(int error)
     } 
 }
 
-typedef struct 
+/**
+ * @brief A 3 dimensional vector 
+ */
+
+ typedef struct 
 {
-    float x, y, z;
+    /** 
+     * @brief X Coordinate 
+     * */
+    float x;
+    /** 
+     * @brief Y Coordinate 
+     * */
+    float y; 
+    /** 
+     * @brief Z Coordinate 
+     * */
+    float z; 
 } 
 Vec3;
 
+/**
+ * @brief A polyhedron object. To serialize polyhedra.
+ */
+
 typedef struct 
 {
+    /**
+     *  @brief The number of vertices
+     *  */
     int vertex_count;
+    /** 
+     * @brief The number of faces
+     *  */
     int face_count;
+    /** 
+     * @brief The vertices 
+     * */
     Vec3* vertices;
+    /** 
+     * @brief The faces (stored as indices of the vertices) 
+     * */
     int** faces;
+    /** 
+     * @brief The sizes of each face 
+     * */
     int* face_sizes;
 } 
 Polyhedron;
 
+/**
+ * @brief A Point Set Linear Graph (pslg)
+ */
+
 typedef struct 
 {
+    /**
+     *  @brief The vertices
+     *  */
     Vec3* vertices;
+    /**
+     *  @brief The edges
+     *  */
     int (*edges)[2]; // diametrically opposed foes, previously closed bros
+    /**
+     *  @brief The vertex count
+     *  */
     int vertex_count;
+    /**
+     *  @brief The number of edges
+     *  */
     int edge_count;
 } 
 PSLG;
 
+/**
+ * @brief A Triangulation
+ */
 typedef struct
 {
+    /**
+     *  @brief The triangles
+     *  */
     Vec3 (*triangles)[3];
+    /**
+     *  @brief The number of triangles
+     *  */
     int triangle_count;
 }
 Triangulation;
@@ -298,7 +378,7 @@ void merge_triangulations(int* result, Triangulation** triangulations, int tri_c
                 triangulations[i]->triangles[j][1],
                 triangulations[i]->triangles[j][2]
             );
-            if (IS_A_ERROR(*out))
+            if (IS_AN_ERROR(*out))
             {
                 *result = *out;
                 return;
@@ -557,7 +637,7 @@ void split_entirely(int* result, PSLG* pslg)
             *result = SUCCESS;
             return;
         }
-        if(IS_A_ERROR(*result))
+        if(IS_AN_ERROR(*result))
         {
             return;
         }
@@ -581,7 +661,7 @@ PSLGTriangulation* create_pslg_triangulation(int* result, PSLG* pslg)
         return NULL;
     }
     pslgtri->triangulation = empty_triangulation(result);
-    if (IS_A_ERROR(*result))
+    if (IS_AN_ERROR(*result))
     {
         free(pslgtri);
         return NULL;
@@ -642,7 +722,7 @@ void attack_vertex(int* result, PSLGTriangulation* pslgtri, int vertex_idx)
         v3 = pslg->edges[e2][0];
     }
     add_triangle(result, tri, pslg->vertices[v1], pslg->vertices[v2], pslg->vertices[v3]);
-    if (IS_A_ERROR(*result))
+    if (IS_AN_ERROR(*result))
     {
         return;
     }
@@ -733,48 +813,57 @@ void attack_all_vertices(int* result, PSLGTriangulation* pslgtri)
         {
             *result = SUCCESS;
         }
-        if (IS_A_ERROR(*result))
+        if (IS_AN_ERROR(*result))
         {
             return; // the error propagates another level
         }
     }
 }
-/*
 
 
-int generate_triangulation(Vec3* vertices, int vertex_count, Triangulation* tri)
+
+void generate_triangulation(int* result, Vec3* vertices, int vertex_count, Triangulation* tri)
 {
-    PSLG* pslg = generate_pslg(vertices, vertex_count);
-    if (split_entirely(pslg) == FAILURE)
+    PSLG* pslg = generate_pslg(result, vertices, vertex_count);
+    if (IS_AN_ERROR(*result))
     {
-        return FAILURE;
+        return;
     }
-    int result;
-    PSLGTriangulation* pslgtri = create_pslg_triangulation(pslg, &result);
-    if (result == FAILURE)
+    split_entirely(result, pslg);
+    if (IS_AN_ERROR(*result))
     {
-        free_pslg(pslg);
-        return FAILURE;
+        return;
     }
-    if(attack_all_vertices(pslgtri) == FAILURE)
+    PSLGTriangulation* pslgtri = create_pslg_triangulation(result, pslg);
+    if (IS_AN_ERROR(*result))
     {
-        return FAILURE;
+        return;
     }
+    attack_all_vertices(result, pslgtri);
+    if (IS_AN_ERROR(*result))
+    {
+        return;
+    }
+
     for(int i = 0; i < pslgtri->triangulation->triangle_count; i++)
     {
-        add_triangle(tri, 
+        add_triangle(result, tri, 
             pslgtri->triangulation->triangles[i][0],
             pslgtri->triangulation->triangles[i][1],
             pslgtri->triangulation->triangles[i][2]
         );
+        if (IS_AN_ERROR(*result))
+        {
+            return;
+        }
     }
     tri->triangle_count = pslgtri->triangulation->triangle_count;
     free_pslg(pslgtri->pslg);
     free_triangulation(pslgtri->triangulation);
     free(pslgtri);
-    return SUCCESS;
+    *result = SUCCESS;
 }
-
+/*
 // a culmination of a lot of this project
 int triangulate_polyhedra(Polyhedron* poly, Triangulation* result)
 {
