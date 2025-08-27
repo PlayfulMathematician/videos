@@ -741,6 +741,7 @@ void attack_all_vertices(int* result, PSLGTriangulation* pslgtri)
 }
 /*
 
+
 int generate_triangulation(Vec3* vertices, int vertex_count, Triangulation* tri)
 {
     PSLG* pslg = generate_pslg(vertices, vertex_count);
