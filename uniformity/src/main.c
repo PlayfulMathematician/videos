@@ -670,12 +670,14 @@ void attack_vertex(int* result, PSLGTriangulation* pslgtri, int vertex_idx)
     for (int i = 0; i < pslg->edge_count; i++)
     {
         // sacrifice e1, and e2
-        if (pslg->edges[i] == e1 || pslg->edges[i] == e2)
+        if (i == e1 || i == e2)
         {
             EI++;
             continue;
         }
-        temp[EI] = pslg->edges[i];
+        temp[EI][0] = pslg->edges[i][0];
+        temp[EI][1] = pslg->edges[i][1];
+
         EI++;
     }
 
@@ -683,7 +685,8 @@ void attack_vertex(int* result, PSLGTriangulation* pslgtri, int vertex_idx)
     // handle it
     if (!e3_exists)
     {
-        temp[EI] = { v1, v2 };
+        temp[EI][0] = v1;
+        temp[EI][1] = v2;
     }
     if (REALIGN(pslg->edge_count, ecount))
     {
@@ -691,6 +694,7 @@ void attack_vertex(int* result, PSLGTriangulation* pslgtri, int vertex_idx)
         if (temp_ptr == NULL)
         {
             *result = PSLG_ATTACK_EDGE_REALLOCATION_ERROR;
+            free(temp);
             return;
         }
         pslg->edges = temp_ptr;
@@ -699,7 +703,8 @@ void attack_vertex(int* result, PSLGTriangulation* pslgtri, int vertex_idx)
     // time to populate the data
     for (int i = 0; i < ecount; i++)
     {
-        pslg->edges[i] = temp[i];
+        temp[EI][0] = pslg->edges[i][0];
+        temp[EI][1] = pslg->edges[i][1];
     }
     free(temp); // this is temporary
     *result = SUCCESS;
@@ -714,9 +719,9 @@ void attack_single_vertex(int* result, PSLGTriangulation* pslgtri)
         {
             continue;
         }
-        return result;
+        return;
     }
-    return NOOP;
+    *result = NOOP;
 }
 
 void attack_all_vertices(int* result, PSLGTriangulation* pslgtri)
@@ -726,7 +731,7 @@ void attack_all_vertices(int* result, PSLGTriangulation* pslgtri)
         attack_single_vertex(result, pslgtri);
         if(*result == NOOP)
         {
-            return SUCCESS;
+            *result = SUCCESS;
         }
         if (IS_A_ERROR(*result))
         {
