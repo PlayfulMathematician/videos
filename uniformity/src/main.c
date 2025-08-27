@@ -704,13 +704,13 @@ void attack_vertex(int* result, PSLGTriangulation* pslgtri, int vertex_idx)
     free(temp); // this is temporary
     *result = SUCCESS;
 }
-/*
-int attack_single_vertex(PSLGTriangulation* pslgtri)
+
+void attack_single_vertex(int* result, PSLGTriangulation* pslgtri)
 {
     for(int i = 0; i < pslgtri->pslg->vertex_count; i++)
     {
-        int result = attack_vertex(pslgtri, i);
-        if(result == NOOP)
+        attack_vertex(result, pslgtri, i);
+        if(*result == NOOP)
         {
             continue;
         }
@@ -719,21 +719,22 @@ int attack_single_vertex(PSLGTriangulation* pslgtri)
     return NOOP;
 }
 
-int attack_all_vertices(PSLGTriangulation* pslgtri)
+void attack_all_vertices(int* result, PSLGTriangulation* pslgtri)
 {
     while(1)
     {
-        int result = attack_single_vertex(pslgtri);
-        if(result == NOOP)
+        attack_single_vertex(result, pslgtri);
+        if(*result == NOOP)
         {
             return SUCCESS;
         }
-        if(result == FAILURE)
+        if (IS_A_ERROR(*result))
         {
-            return FAILURE;
+            return; // the error propagates another level
         }
     }
 }
+/*
 
 int generate_triangulation(Vec3* vertices, int vertex_count, Triangulation* tri)
 {
