@@ -221,7 +221,7 @@ typedef struct
 PSLG;
 
 /**
- * @brief A Triangulation
+ * @brief A triangulation
  */
 typedef struct
 {
@@ -236,16 +236,34 @@ typedef struct
 }
 Triangulation;
 
+/**
+ * @brief Literally just a PSLG and a Triangulation
+ */
 typedef struct
 {
+    /**
+     *  @brief This is a PSLG
+     *  */
     PSLG* pslg;
+    /**
+     *  @brief This is a triangulation
+     *  */
     Triangulation* triangulation;
 }
 PSLGTriangulation;
 
+/**
+ * @brief This stores basically anything. 
+ */
 typedef struct
 {
+    /**
+     * @brief This stores all of the data
+     */
     void** data;
+    /**
+    * @brief How big is the dumpster;
+    */
     int dumpster_size;
 }
 Dumpster;
@@ -256,40 +274,113 @@ typedef struct VideoData VideoData;
 typedef struct AnimationSection AnimationSection;  
 
 
-
+/**
+ * @brief This stores animations
+ */
 struct Animation
-{
+{   
+    /**
+     * @brief The start time of the animation (in frames)
+     */
     int start_t;
+    /**
+     * @brief The end time of the animation (in frames)
+     */
     int end_t;
+    /**
+     * @brief The construction function to be run on animation start
+     */
     void (*construct)(struct Animation*);
+    /**
+     * @brief The function run before a frame is rendered.
+     */
     void (*preproc)(struct Animation*, int t);
+    /**
+     * @brief The function run for rendering
+     */
     void (*render)(struct Animation*, int t);
+    /**
+     * @brief The post processing function
+     */
     void (*postproc)(struct Animation*, int t);
+    /**
+     * @brief The free function 
+     * */
     void (*free)(struct Animation*);
+    /**
+     * @brief Put data here
+     */
     Dumpster dumpster;
 };
 
-
+/**
+ * @brief A group of Animations
+ * @remark The animations individually can extend past the animation section end.
+ */
 struct AnimationSection
 {
+    /**
+     * @brief The name of the animation section
+     */
     char* name;
+    /**
+     * @brief The animations within the animation section
+     */
     Animation* animations;
+    /**
+     * @brief The number of animations
+     */
     int animation_count;
+    /**
+     * @brief The start of the animation
+     */
     int start_t;
+    /**
+     * @brief The end of the animation
+     */
     int end_t;
+    /**
+     * @brief Why is this here!?!
+     * @remark Consider removing
+     */
     void (*init)(struct AnimationSection*);
+    /**
+     * @brief A pointer an object that has a pointer to this object. 
+     */
     VideoData* vd;
 };
-
+/**
+ * @brief The video data
+ */
 struct VideoData
 {
+    /**
+     * @brief The animation sections
+     */
     AnimationSection* animation_section;
+    /**
+     * @brief The number of sections
+     */
     int section_count;
+    /**
+     * @brief Backreference to Global Buffer
+     */
     GlobalBuffer* gb;
+    /**
+     * @brief Who wrote this?! Why does this exist
+     */
     void (*init)(struct VideoData*); 
+    /**
+     * @brief Again why does this exist!?!
+     */
     void (*free)(struct VideoData*); 
 };
 
+/**
+ * @brief The sound data
+ * @remark I will not document this.
+ * @todo Document this.
+ */
 typedef struct
 {
    char*** sounds;
@@ -301,12 +392,25 @@ typedef struct
 }
 SoundData;
 
+/**
+ * @brief The most important class, it contains basically everything. 
+ */
 struct GlobalBuffer
 {
+    /**
+     * @brief The sound data
+     */
     SoundData* sounddata;
+    /**
+     * @brief The video data
+     */
     VideoData* videodata;
 };
-
+/**
+ * @brief It outputs an empty triangulations
+ * @param[out] result The result is set to all the goofy errors.
+ * @return The triangulation
+ */
 Triangulation* empty_triangulation(int* result)
 {
     Triangulation* tri = malloc(sizeof(Triangulation));
@@ -321,6 +425,15 @@ Triangulation* empty_triangulation(int* result)
 
 }
 
+/**
+ * @brief It adds a triangle to a triangulation
+ * @param[out] result The result is set to all the goofy errors.
+ * @param tri The triangulation that must have a new triangle appended to it
+ * @param a The first vertex of the triangle
+ * @param b The second vertex of the triangle
+ * @param c The final vertex of the triangle 
+ * @return Nothing
+ */
 void add_triangle(int* result, Triangulation* tri, Vec3 a, Vec3 b, Vec3 c)
 {
     if (!tri) 
