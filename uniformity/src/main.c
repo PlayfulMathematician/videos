@@ -66,6 +66,9 @@ This allow for more useful outputs to functions.
 #define PSLG_EDGE_SPLIT_VERTEX_REALLOC_ERROR 0x03000006
 #define PSLG_EDGE_SPLIT_EDGE_REALLOC_ERROR 0x03000007
 #define PSLG_TRIANGULATION_INIT_MALLOC_ERROR 0x03000008
+#define PSLG_ATTACK_TEMP_EDGES_MALLOC_ERROR 0x03000009
+#define PSLG_ATTACK_EDGE_REALLOCATION_ERROR 0x0300000a
+
 
 
 
@@ -108,6 +111,12 @@ void print_error(int error)
             break;
         case PSLG_TRIANGULATION_INIT_MALLOC_ERROR:
             fprintf(stderr, "When creating a pslg triangulation, allocating memory for the pslg triangulation failed.\n");
+            break;
+        case PSLG_ATTACK_TEMP_EDGES_MALLOC_ERROR:
+            fprintf(stderr, "When attacking a PSLG triangulation, using malloc to allocate temporary edge list failed.\n");
+            break;
+        case PSLG_ATTACK_EDGE_REALLOCATION_ERROR:
+            fprintf(stderr, "This shouldn't happen, but in the rare case it does, shrinking the memory during a PSLG vertex attack somehow failed.\n");
             break;
         default:
             fprintf(stderr, "SOMETHING BAD HAPPENED\n");
@@ -650,8 +659,50 @@ void attack_vertex(int* result, PSLGTriangulation* pslgtri, int vertex_idx)
             break;
         }
     }
+    int ecount = e3_exists ? pslg->edge_count - 2 : pslg->edge_count - 1;
+    int (*temp)[2] = malloc(ecount * sizeof(int[2])); // this isn't aligned because it is gonna DIE SOON.
+    if (temp == NULL)
+    {
+        *result = PSLG_ATTACK_TEMP_EDGES_MALLOC_ERROR;
+        return;
+    }
+    int EI = 0;
+    for (int i = 0; i < pslg->edge_count; i++)
+    {
+        // sacrifice e1, and e2
+        if (pslg->edges[i] == e1 || pslg->edges[i] == e2)
+        {
+            EI++;
+            continue;
+        }
+        temp[EI] = pslg->edges[i];
+        EI++;
+    }
+
     // so e3_exists
     // handle it
+    if (!e3_exists)
+    {
+        temp[EI] = { v1, v2 };
+    }
+    if (REALIGN(pslg->edge_count, ecount))
+    {
+        int (*temp_ptr)[2] = realloc(pslg->edges, BIT_ALIGN(ecount) * sizeof(int[2]));
+        if (temp_ptr == NULL)
+        {
+            *result = PSLG_ATTACK_EDGE_REALLOCATION_ERROR;
+            return;
+        }
+        pslg->edges = temp_ptr;
+    }
+    pslg->edge_count = ecount;
+    // time to populate the data
+    for (int i = 0; i < ecount; i++)
+    {
+        pslg->edges[i] = temp[i];
+    }
+    free(temp); // this is temporary
+    *result = SUCCESS;
 }
 /*
 int attack_single_vertex(PSLGTriangulation* pslgtri)
