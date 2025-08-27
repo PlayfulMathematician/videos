@@ -811,30 +811,6 @@ int triangulate_polyhedra(Polyhedron* poly, Triangulation* result)
 }
 
 // t
-void print_vertex(Vec3 v)
-{
-    printf("\t\tX: %f\n", v.x);
-    printf("\t\tY: %f\n", v.y);
-    printf("\t\tZ: %f\n", v.z);
-}
-void print_polyhedron(Polyhedron* poly)
-{
-    printf("Vertices:\n");
-    for (int i = 0; i < poly->vertex_count; i++)
-    {   
-        printf("\tVertex %d: \n", i);
-        print_vertex(poly->vertices[i]);
-    }
-    printf("Faces:\n");
-    for (int i = 0; i < poly->face_count; i++)
-    {   
-        printf("\tFace %d: \n", i);
-        for(int j = 0; j < poly->face_sizes[i]; j++)
-        {
-            printf("\t\t%d\n",poly->faces[i][j]);
-        }
-    }
-}
 
 Polyhedron* create_polyhedron(int nv, int nf) 
 {
