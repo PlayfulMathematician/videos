@@ -44,7 +44,6 @@
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_mixer.h>
 #include <GL/gl.h>
-#include <stdio.h>
 // what is posix
 /// @def EPSILON
 /// @brief Tolerance for floating-point comparisons.
