@@ -93,11 +93,13 @@
 #define PSLG_TRIANGULATION_INIT_MALLOC_ERROR 0x03000008 ///< Coupled PSLG+tri malloc failed.
 #define PSLG_ATTACK_TEMP_EDGES_MALLOC_ERROR 0x03000009  ///< Attack: malloc for temp edges failed.
 #define PSLG_ATTACK_EDGE_REALLOCATION_ERROR 0x0300000a  ///< Attack: realloc failed on edges.
+
 /** 
  * @brief Print out the error 
  * @param error The error the need be printed.
  * @return I will not return anything 
 */
+
 void print_error(int error)
 {
     if (!IS_AN_ERROR(error))
@@ -406,11 +408,13 @@ struct GlobalBuffer
      */
     VideoData* videodata;
 };
+
 /**
  * @brief It outputs an empty triangulations
  * @param[out] result The result is set to all the goofy errors.
  * @return The triangulation
  */
+
 Triangulation* empty_triangulation(int* result)
 {
     Triangulation* tri = malloc(sizeof(Triangulation));
@@ -434,6 +438,7 @@ Triangulation* empty_triangulation(int* result)
  * @param c The final vertex of the triangle 
  * @return Nothing
  */
+
 void add_triangle(int* result, Triangulation* tri, Vec3 a, Vec3 b, Vec3 c)
 {
     if (!tri) 
@@ -459,6 +464,15 @@ void add_triangle(int* result, Triangulation* tri, Vec3 a, Vec3 b, Vec3 c)
     tri->triangle_count++;
     *result = SUCCESS;
 }
+
+/**
+ * @brief It takes a collection of triangulations and merges them
+ * @param[out] result The error code
+ * @param triangulations The input triangulations
+ * @param tri_count The number of triangulations
+ * @param output A pointer to where the output will be stored
+ * @return Nothing
+ */
 
 void merge_triangulations(int* result, Triangulation** triangulations, int tri_count, Triangulation* output)
 {
@@ -501,6 +515,13 @@ void merge_triangulations(int* result, Triangulation** triangulations, int tri_c
     *result = SUCCESS;
 }
 
+/**
+ * @brief This function frees a triangulation object
+ * @param[out] result This is always SUCCESS because freeing will always happen 
+ * @param triangulation This is the triangulation to be freed
+ * @return nothing
+ */
+
 void free_triangulation(int* result, Triangulation* triangulation)
 {
     free(triangulation->triangles);   
@@ -510,6 +531,12 @@ void free_triangulation(int* result, Triangulation* triangulation)
     *result = SUCCESS; // I genuinely could not think of a way for free to fail. 
 }
 
+/**
+ * @brief This adds two vectors and returns the result
+ * @param a The first vector to be added
+ * @param b The second vector to be added
+ * @return This is the output of their summation
+ */
 
 Vec3 add_vec3(Vec3 a, Vec3 b)
 {
@@ -520,6 +547,13 @@ Vec3 add_vec3(Vec3 a, Vec3 b)
     return result;
 }
 
+/**
+ * @brief This multiplies a vector by a scalar
+ * @param a This is the vector
+ * @param scalar This is a scalar
+ * @return It returns the product of the vector and the scalar
+ */
+
 Vec3 multiply_vec3(Vec3 a, float scalar)
 {
     Vec3 result;
@@ -529,15 +563,41 @@ Vec3 multiply_vec3(Vec3 a, float scalar)
     return result;
 }
 
+/**
+ * @brief This subtracts two vectors and returns the result
+ * @param a The vector to be subtracteed from
+ * @param b The vector to be subtracted
+ * @return This is the output of their subtraction so @p a - @p b
+ */
+
 Vec3 subtract_vec3(Vec3 a, Vec3 b)
 {
     return add_vec3(a, multiply_vec3(b, -1.0f));
 }
 
+
+/**
+ * @brief This interpolates between two vectors
+ * @param a This is the starting vector
+ * @param b This is the ending vector
+ * @param t This is how much we interpolate
+ * @return It returns lerp( @p a, @p b, @p t )
+ */
+
 Vec3 lerp_vec3(Vec3 a, Vec3 b, float t)
 {
     return add_vec3(a, multiply_vec3(subtract_vec3(b, a), t));
 }
+
+/**
+ * @brief This checks if two segments are intersecting
+ * @param a This parameter is the first vertex of the first edge
+ * @param b This parameter is the second vertex of the first edge
+ * @param c This parameter is the first vertex of the second edge
+ * @param d This parameter is the second vertex of the second edge.
+ * @param[out] out If the edges intersect, this outputs where they intersect.
+ * @return This outputs 1 if they intersect but 0 if they don't
+ */
 
 int intersecting_segments(Vec3 a, Vec3 b, Vec3 c, Vec3 d, Vec3* out)
 {
@@ -617,6 +677,14 @@ int intersecting_segments(Vec3 a, Vec3 b, Vec3 c, Vec3 d, Vec3* out)
     return 0;
 }
 
+/**
+ * @brief This generates a PSLG from a polygon
+ * @param[out] result This outputs the errors
+ * @param vertices These are the vertices of the polygon
+ * @param vertex_count This is the number of the vertices
+ * @return This outputs the PSLG (or a pointer to it but nobody asked)
+ */
+
 PSLG* generate_pslg(int* result, Vec3* vertices, int vertex_count)
 {
     PSLG* new = malloc(sizeof(PSLG));
@@ -659,6 +727,16 @@ PSLG* generate_pslg(int* result, Vec3* vertices, int vertex_count)
     *result = SUCCESS;
     return new;
 }
+
+/**
+ * @brief This takes two edges and splits a PSLG if neccesary
+ * @param[out] result This outputs the errors and status
+ * @param pslg This is the input pslg
+ * @param edge1 This is the first edge
+ * @param edge2 This is the second edge
+ * @return This outputs nothing. 
+ */
+
 void splitPSLG(int* result, PSLG* pslg, int edge1, int edge2)
 {
     Vec3 out;
@@ -723,6 +801,13 @@ void splitPSLG(int* result, PSLG* pslg, int edge1, int edge2)
     *result = SUCCESS;
 }
 
+/**
+ * @brief This removes a single edge
+ * @param[out] result This is the status
+ * @param pslg This is the PSLG that needs an edge to be removed 
+ * @return This outputs nothing 
+ */
+
 void remove_single_edge(int* result, PSLG* pslg)
 {
     for(int i = 0; i < pslg->edge_count; i++)
@@ -739,6 +824,13 @@ void remove_single_edge(int* result, PSLG* pslg)
     }
     *result = NOOP;
 }
+
+/**
+ * @brief This splits it entirely
+ * @param[out] result The status
+ * @param pslg The pslg that need be split
+ * @return This outputs nothing 
+ */
 
 void split_entirely(int* result, PSLG* pslg)
 {
@@ -757,6 +849,11 @@ void split_entirely(int* result, PSLG* pslg)
     }
 }
 
+/**
+ * @brief This frees a pslg
+ * @param pslg This is the PSLG that need be freed.
+ */
+
 void free_pslg(PSLG* pslg)
 {
     // if this function fails that would funny lol, but that isn't happening
@@ -764,6 +861,13 @@ void free_pslg(PSLG* pslg)
     free(pslg->vertices);
     free(pslg);
 }
+
+/**
+ * @brief This takes a pslg and makes an empty triangulation and merges them
+ * @param[out] result This is the status
+ * @param pslg This is the pslg that we use to construct the PSLGTriangulation
+ * @return This is the resulting PSLGTriangulation
+ */
 
 PSLGTriangulation* create_pslg_triangulation(int* result, PSLG* pslg)
 {
@@ -784,7 +888,13 @@ PSLGTriangulation* create_pslg_triangulation(int* result, PSLG* pslg)
     return pslgtri;
 }
 
-
+/**
+ * @brief This attacks a vertex
+ * @param[out] result This is the status
+ * @param pslgtri The PSLGTriangulation that has the vertex to be attacked
+ * @param vertex_idx The index of the vertex
+ * @return Nothing
+ */
 
 void attack_vertex(int* result, PSLGTriangulation* pslgtri, int vertex_idx)
 {   
@@ -903,6 +1013,13 @@ void attack_vertex(int* result, PSLGTriangulation* pslgtri, int vertex_idx)
     *result = SUCCESS;
 }
 
+/**
+ * @brief This attacks a single vertex
+ * @param[out] result This is the status
+ * @param pslgtri This is the PSLGTriangulation to attack
+ * @return nothing
+ */
+
 void attack_single_vertex(int* result, PSLGTriangulation* pslgtri)
 {
     for(int i = 0; i < pslgtri->pslg->vertex_count; i++)
@@ -916,6 +1033,13 @@ void attack_single_vertex(int* result, PSLGTriangulation* pslgtri)
     }
     *result = NOOP;
 }
+
+/**
+ * @brief This attacks a all vertices
+ * @param[out] result This is the status
+ * @param pslgtri This is the PSLGTriangulation to attack
+ * @return nothing
+ */
 
 void attack_all_vertices(int* result, PSLGTriangulation* pslgtri)
 {
@@ -933,7 +1057,14 @@ void attack_all_vertices(int* result, PSLGTriangulation* pslgtri)
     }
 }
 
-
+/**
+ * @brief This generates a triangulation of a polygon
+ * @param[out] result This is the status
+ * @param vertices These are the vertices
+ * @param vertex_count This is the amount of vertices
+ * @param tri This is where the triangulation will be stored.
+ * @return output nothing
+ */
 
 void generate_triangulation(int* result, Vec3* vertices, int vertex_count, Triangulation* tri)
 {
@@ -976,8 +1107,7 @@ void generate_triangulation(int* result, Vec3* vertices, int vertex_count, Trian
     free(pslgtri);
     *result = SUCCESS;
 }
-/*
-// a culmination of a lot of this project
+// refactor soon
 int triangulate_polyhedra(Polyhedron* poly, Triangulation* result)
 {
     printf("G\n");
@@ -1019,7 +1149,7 @@ int triangulate_polyhedra(Polyhedron* poly, Triangulation* result)
 }
 
 // t
-
+/*
 Polyhedron* create_polyhedron(int nv, int nf) 
 {
     Polyhedron* poly = malloc(sizeof(Polyhedron));
