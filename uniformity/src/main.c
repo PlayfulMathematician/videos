@@ -39,11 +39,13 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <ctype.h>
 #include <math.h>
 #include <stdint.h>
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_mixer.h>
 #include <GL/gl.h>
+
 // what is posix
 /// @def EPSILON
 /// @brief Tolerance for floating-point comparisons.
@@ -1314,7 +1316,13 @@ void render_gb(GlobalBuffer* gb, int t)
 /**
  * @todo Parse OFF Files
  */
-float angle = 0.0f;
+
+
+/**
+ * @brief This draws a triangulation
+ * @param tri This is the triangulation to be drawn
+ * @return nothing
+ */
 
 void draw_tri(Triangulation* tri) {
     glBegin(GL_TRIANGLES);
@@ -1328,7 +1336,15 @@ void draw_tri(Triangulation* tri) {
     glEnd();
 }
 
+/**
+ * @brief the main function lol
+ * @param argc lol
+ * @param argv lol
+ * @return nothinf
+ */
+
 int main(int argc, char *argv[]) {
+    float angle = 0.0f;
     SDL_Init(SDL_INIT_VIDEO);
 
     SDL_GL_SetAttribute(SDL_GL_MULTISAMPLEBUFFERS, 1);
