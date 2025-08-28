@@ -93,6 +93,8 @@
 #define PSLG_TRIANGULATION_INIT_MALLOC_ERROR 0x03000008 ///< Coupled PSLG+tri malloc failed.
 #define PSLG_ATTACK_TEMP_EDGES_MALLOC_ERROR 0x03000009  ///< Attack: malloc for temp edges failed.
 #define PSLG_ATTACK_EDGE_REALLOCATION_ERROR 0x0300000a  ///< Attack: realloc failed on edges.
+#define TRIANGULATE_POLYHEDRON_BATCH_TRIANGULATIONS_MALLOC_ERROR 0x0300000b ///< Allocating an array of triangulation pointers failed when triangulation a polyhedron.
+#define TRIANGULATE_POLYHEDRON_VERTEX_MALLOC_ERROR 0x0300000c
 
 /** 
  * @brief Print out the error 
@@ -140,6 +142,12 @@ void print_error(int error)
             break;
         case PSLG_ATTACK_EDGE_REALLOCATION_ERROR:
             fprintf(stderr, "This shouldn't happen, but in the rare case it does, shrinking the memory during a PSLG vertex attack somehow failed.\n");
+            break;
+        case TRIANGULATE_POLYHEDRON_BATCH_TRIANGULATIONS_MALLOC_ERROR:
+            fprintf(stderr, "When allocating a bunch an array of triangulation pointers, Memory allocating failed\n");
+            break;
+        case TRIANGULATE_POLYHEDRON_VERTEX_MALLOC_ERROR:
+            fprintf(stderr, "When allocating vertices during polyhedron triangulation, malloc failed.\n");
             break;
         default:
             fprintf(stderr, "SOMETHING BAD HAPPENED\n");
@@ -1108,44 +1116,54 @@ void generate_triangulation(int* result, Vec3* vertices, int vertex_count, Trian
     *result = SUCCESS;
 }
 // refactor soon
-int triangulate_polyhedra(Polyhedron* poly, Triangulation* result)
+void triangulate_polyhedra(int* result, Polyhedron* poly, Triangulation* out)
 {
-    printf("G\n");
     Triangulation** tris = malloc(poly->face_count * sizeof(Triangulation*));
     if (!tris)
     {
-        return FAILURE;
+        *result = TRIANGULATE_POLYHEDRON_BATCH_TRIANGULATIONS_MALLOC_ERROR;
+        return;
     }
-    printf("DO YOU DIE TODAY\n");
     for (int i = 0; i < poly->face_count; i++)
-    {
-        Triangulation* t = empty_triangulation();
-        Vec3* vertices = malloc(poly->face_sizes[i] * sizeof(Vec3));
+    {   
+        Triangulation* t = empty_triangulation(result);
+        if (IS_A_ERROR(*result))
+        {
+            return;
+        }
+        Vec3* vertices = malloc(REALIGN(poly->face_sizes[i]) * sizeof(Vec3)); 
         if (!vertices)
         {
-            return FAILURE;
+            *result = TRIANGULATE_POLYHEDRON_VERTEX_MALLOC_ERROR;
+            return;
         }
         for (int j = 0; j < poly->face_sizes[i]; j++)
         {
             vertices[j] = poly->vertices[poly->faces[i][j]];
         }
-        int result = generate_triangulation(vertices, poly->face_sizes[i], t);
-        if (result == FAILURE)
+        generate_triangulation(result, vertices, poly->face_sizes[i], t);
+        if (IS_A_ERROR(*result))
         {
-            printf("DO YOU YOYO\n");
-            return FAILURE;
+            return;
         }
         free(vertices);
         tris[i] = t;
-        printf("fas\n");
     }
-    merge_triangulations(tris, poly->face_count, result);
+    merge_triangulations(result, tris, poly->face_count, out);
+    if (IS_A_ERROR(*result))
+    {
+        return;
+    }
     for(int i = 0; i < poly->face_count; i++)
     {
-        free_triangulation(tris[i]);
+        free_triangulation(result, tris[i]);
+        if (IS_A_ERROR(*result))
+        {
+            return;
+        }
     }
     free(tris);
-    return SUCCESS;
+    *result = SUCCESS;
 }
 
 // t
