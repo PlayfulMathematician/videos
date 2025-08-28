@@ -79,7 +79,7 @@
 #define STATUS_TYPE(code) (((code) & STATUS_TYPE_MASK) >> STATUS_TYPE_SHIFT)
 
 /// @brief True if code is an error (NONFATAL or FATAL).
-#define IS_A_ERROR(x) ((STATUS_TYPE((x)) == FATAL) || (STATUS_TYPE((x)) == NONFATAL))
+#define IS_AN_ERROR(x) ((STATUS_TYPE((x)) == FATAL) || (STATUS_TYPE((x)) == NONFATAL))
 
 // Error codes
 #define TRI_INIT_MALLOC_FAIL 0x03000000   ///< Triangulation malloc failed.
@@ -94,7 +94,11 @@
 #define PSLG_ATTACK_TEMP_EDGES_MALLOC_ERROR 0x03000009  ///< Attack: malloc for temp edges failed.
 #define PSLG_ATTACK_EDGE_REALLOCATION_ERROR 0x0300000a  ///< Attack: realloc failed on edges.
 #define TRIANGULATE_POLYHEDRON_BATCH_TRIANGULATIONS_MALLOC_ERROR 0x0300000b ///< Allocating an array of triangulation pointers failed when triangulation a polyhedron.
-#define TRIANGULATE_POLYHEDRON_VERTEX_MALLOC_ERROR 0x0300000c
+#define TRIANGULATE_POLYHEDRON_VERTEX_MALLOC_ERROR 0x0300000c ///< When triangulating the polyhedron, allocating memory for vertices failed
+#define POLYHEDRON_MALLOC_ERROR 0x0300000d ///< When allocating memory for polyhedron, malloc failed
+#define POLYHEDRON_VERTEX_MALLOC_ERROR 0x0300000e ///< When allocating memory for the vertices of a polyhedron, malloc failed
+#define POLYHEDRON_FACE_MALLOC_ERROR 0x0300000f ///< When allocating memory for the faces of a polyhedron, malloc failed
+#define POLYHEDRON_FACE_SIZES_MALLOC_ERROR 0x03000010 ///< When allocating memory for the face sizes of the polyhedron, malloc failed
 
 /** 
  * @brief Print out the error 
@@ -149,6 +153,18 @@ void print_error(int error)
         case TRIANGULATE_POLYHEDRON_VERTEX_MALLOC_ERROR:
             fprintf(stderr, "When allocating vertices during polyhedron triangulation, malloc failed.\n");
             break;
+        case POLYHEDRON_MALLOC_ERROR:
+            fprintf("When allocating a polyhedron, malloc failed\n");
+            break;
+        case POLYHEDRON_VERTEX_MALLOC_ERROR:
+            fprintf("When allocating the vertices of the polyhedron, malloc failed\n");
+            break;
+        case POLYHEDRON_FACE_MALLOC_ERROR:
+            fprintf("When allocating the faces of the polyhedron, malloc failed\n");
+            break;
+        case POLYHEDRON_FACE_MALLOC_ERROR:
+            fprintf("When allocating the face sizes of the polyhedron, malloc failed\n");
+            break;
         default:
             fprintf(stderr, "SOMETHING BAD HAPPENED\n");
             break;
@@ -159,7 +175,7 @@ void print_error(int error)
  * @brief A 3 dimensional vector 
  */
 
- typedef struct 
+typedef struct 
 {
     /** 
      * @brief X Coordinate 
@@ -233,6 +249,7 @@ PSLG;
 /**
  * @brief A triangulation
  */
+
 typedef struct
 {
     /**
@@ -249,6 +266,7 @@ Triangulation;
 /**
  * @brief Literally just a PSLG and a Triangulation
  */
+
 typedef struct
 {
     /**
@@ -265,6 +283,7 @@ PSLGTriangulation;
 /**
  * @brief This stores basically anything. 
  */
+
 typedef struct
 {
     /**
@@ -287,6 +306,7 @@ typedef struct AnimationSection AnimationSection;
 /**
  * @brief This stores animations
  */
+
 struct Animation
 {   
     /**
@@ -327,6 +347,7 @@ struct Animation
  * @brief A group of Animations
  * @remark The animations individually can extend past the animation section end.
  */
+
 struct AnimationSection
 {
     /**
@@ -359,9 +380,11 @@ struct AnimationSection
      */
     VideoData* vd;
 };
+
 /**
  * @brief The video data
  */
+
 struct VideoData
 {
     /**
@@ -391,6 +414,7 @@ struct VideoData
  * @remark I will not document this.
  * @todo Document this.
  */
+
 typedef struct
 {
    char*** sounds;
@@ -405,6 +429,7 @@ SoundData;
 /**
  * @brief The most important class, it contains basically everything. 
  */
+
 struct GlobalBuffer
 {
     /**
@@ -1115,8 +1140,16 @@ void generate_triangulation(int* result, Vec3* vertices, int vertex_count, Trian
     free(pslgtri);
     *result = SUCCESS;
 }
-// refactor soon
-void triangulate_polyhedra(int* result, Polyhedron* poly, Triangulation* out)
+
+/**
+ * @brief Triangulates the polyhedron
+ * @param[out] result The status
+ * @param poly The polyhedron to be triangulated
+ * @param out Where the triangulation is stored
+ * @return nothing
+ */
+
+void triangulate_polyhedron(int* result, Polyhedron* poly, Triangulation* out)
 {
     Triangulation** tris = malloc(poly->face_count * sizeof(Triangulation*));
     if (!tris)
@@ -1127,7 +1160,7 @@ void triangulate_polyhedra(int* result, Polyhedron* poly, Triangulation* out)
     for (int i = 0; i < poly->face_count; i++)
     {   
         Triangulation* t = empty_triangulation(result);
-        if (IS_A_ERROR(*result))
+        if (IS_AN_ERROR(*result))
         {
             return;
         }
@@ -1142,7 +1175,7 @@ void triangulate_polyhedra(int* result, Polyhedron* poly, Triangulation* out)
             vertices[j] = poly->vertices[poly->faces[i][j]];
         }
         generate_triangulation(result, vertices, poly->face_sizes[i], t);
-        if (IS_A_ERROR(*result))
+        if (IS_AN_ERROR(*result))
         {
             return;
         }
@@ -1150,14 +1183,14 @@ void triangulate_polyhedra(int* result, Polyhedron* poly, Triangulation* out)
         tris[i] = t;
     }
     merge_triangulations(result, tris, poly->face_count, out);
-    if (IS_A_ERROR(*result))
+    if (IS_AN_ERROR(*result))
     {
         return;
     }
     for(int i = 0; i < poly->face_count; i++)
     {
         free_triangulation(result, tris[i]);
-        if (IS_A_ERROR(*result))
+        if (IS_AN_ERROR(*result))
         {
             return;
         }
@@ -1166,34 +1199,51 @@ void triangulate_polyhedra(int* result, Polyhedron* poly, Triangulation* out)
     *result = SUCCESS;
 }
 
-// t
-/*
-Polyhedron* create_polyhedron(int nv, int nf) 
+/**
+ * @brief This allocates memory for a polyhedron
+ * @param[out] result This is the status of this function
+ * @param nv The vertex count
+ * @param nf The face count
+ * @return A pointer to your brand new polyhedron
+ */
+
+Polyhedron* create_polyhedron(int* result, int nv, int nf) 
 {
     Polyhedron* poly = malloc(sizeof(Polyhedron));
     if (!poly)
     {
-        exit(1);
+        *result = POLYHEDRON_MALLOC_ERROR;
+        return;
     }
     poly->vertex_count = nv;
     poly->face_count = nf;
     poly->vertices = malloc(nv * sizeof(Vec3));
     if (!poly->vertices)
     {
-        exit(1);
+        *result = POLYHEDRON_VERTEX_MALLOC_ERROR;
+        return;
     }
     poly->faces = malloc(nf * sizeof(int*));
     if (!poly->faces)
     {
-        exit(1);
+        *result = POLYHEDRON_FACE_MALLOC_ERROR;
+        return;
     }
     poly->face_sizes = malloc(nf * sizeof(int));
     if (!poly->face_sizes)
     {
-        exit(1);
+        *result = POLYHEDRON_FACE_SIZES_MALLOC_ERROR;
+        return;
     }
+    *result = SUCCESS;
     return poly;
 }
+
+/**
+ * @brief This takes a polyhedron and frees it
+ * @param poly This is the polyhedron to be freed
+ * @return nothing
+ */
 
 void free_polyhedron(Polyhedron* poly)
 {
@@ -1206,157 +1256,13 @@ void free_polyhedron(Polyhedron* poly)
     free(poly->vertices);
     free(poly);
 }
+/**
+ * @brief This takes a global buffer and renders it
+ * @param gb This is the global buffer to be rendered
+ * @param t This is the frame index
+ * @return This returns nothing
+ */
 
-int read_off_header (FILE* fin, int* nv, int* nf)
-{
-    char line[256];
-    if (!fgets(line, sizeof(line), fin))
-    {
-        return 0;
-    }
-    if (strncmp(line, "OFF", 3) != 0)
-    {
-        return 0;
-    }
-    do 
-    {
-        if (!fgets(line, sizeof(line), fin))
-        {
-            return 0;
-        }
-    }
-    while (line[0] == '#' || line[0] == '\n');
-    int _;
-    int* __ = &_;
-    
-    if (sscanf(line, "%d %d %d", nv, nf, __) != 3)
-    {
-        return 0;
-    }
-    return 1;
-}
-
-int read_vertex (FILE* fin, Polyhedron* poly, int vertex_idx)
-{
-    char line[256];
-    do 
-    {
-        if (!fgets(line, sizeof(line), fin))
-        {
-            return 0;
-        }
-    } 
-    while (line[0] == '#' || line[0] == '\n');
-    float x, y, z;
-    if (sscanf(line, "%f %f %f", &x, &y, &z) != 3) 
-    {
-        return 0;
-    }
-    poly->vertices[vertex_idx].x = x;
-    poly->vertices[vertex_idx].y = y;
-    poly->vertices[vertex_idx].z = z;
-    return 1;
-}
-
-int read_face (FILE* fin, Polyhedron* poly, int face_index)
-{
-
-    char line[1024];
-    do 
-    {
-        if (!fgets(line, sizeof(line), fin))
-        {
-            return 0;
-        }
-    } 
-    while (line[0] == '#' || line[0] == '\n');
-    int n;
-    char* ptr = line;
-
-    if (sscanf(ptr, "%d", &n) != 1)
-    {
-        return 0;
-    }
-    poly->face_sizes[face_index] = n;
-    poly->faces[face_index] = malloc(n * sizeof(int));
-    if (!poly->faces[face_index])
-    {
-        return 0;
-    }
-    ptr = strchr(ptr, ' ');
-    if (!ptr)
-    {
-        return 0;        
-    }
-    for (int j = 0; j < n; j++)
-    {
-        while(*ptr == ' ') 
-        {
-            ptr++; 
-        }
-        if (sscanf(ptr, "%d", &poly->faces[face_index][j]) != 1)
-        {
-            return 0;
-        }
-        ptr = strchr(ptr, ' ');
-        if (!ptr && j < n - 1)
-        {
-            return 0;
-        }
-    }
-    return 1;
-
-}
-
-int read_faces(FILE* fin, Polyhedron* poly)
-{
-    for (int i = 0; i < poly->face_count; i++)
-    {
-        if(!read_face(fin, poly, i))
-        {
-            return 0;
-        }
-    }
-    return 1;
-}
-
-
-
-int read_vertices (FILE* fin, Polyhedron* poly) 
-{
-    for (int i = 0; i < poly->vertex_count; i++) 
-    {
-        if (!read_vertex(fin, poly, i)) 
-        {
-            return 0; 
-        }
-    }
-    return 1;
-}
-
-Polyhedron* polyhedron_from_off(FILE* fin)
-{
-    int nv, nf;
-    int result = read_off_header(fin, &nv, &nf);
-    if (result == FAILURE)
-    {
-        return NULL;
-    }
-
-    Polyhedron* poly = create_polyhedron(nv, nf);
-    result = read_vertices(fin, poly);
-    if (result == FAILURE)
-    {
-        return NULL;
-    }
-    result = read_faces(fin, poly);
-    if (result == FAILURE)
-    {
-        return NULL;
-    }
-    return poly;
-}
-// WARNING THIS FUNCTION IS DEEPLY NESTED
 void render_gb(GlobalBuffer* gb, int t)
 {
     for(int i = 0; i < gb->videodata->section_count; i++)
@@ -1381,34 +1287,12 @@ void render_gb(GlobalBuffer* gb, int t)
                     {
                         a->construct(a);
                     }
-                }
-                for (int j = 0; j < gb->videodata->animation_section[i].animation_count; j++)
-                {
-                    Animation* a = &gb->videodata->animation_section[i].animations[j];
                     if (a->start_t <= t && a->end_t >= t)
                     {
-                        a->preproc(a,t);
-                    }
-                }
-                for (int j = 0; j < gb->videodata->animation_section[i].animation_count; j++)
-                {
-                    Animation* a = &gb->videodata->animation_section[i].animations[j];
-                    if (a->start_t <= t && a->end_t >= t)
-                    {
+                        a->preproc(a, t);
                         a->render(a, t);
-                    }
-                }
-                for (int j = 0; j < gb->videodata->animation_section[i].animation_count; j++)
-                {
-                    Animation* a = &gb->videodata->animation_section[i].animations[j];
-                    if (a->start_t <= t && a->end_t >= t)
-                    {
                         a->postproc(a, t);
                     }
-                }
-                for (int j = 0; j < gb->videodata->animation_section[i].animation_count; j++)
-                {
-                    Animation* a = &gb->videodata->animation_section[i].animations[j];
                     if (a->end_t == t)
                     {
                         a->free(a);
@@ -1419,7 +1303,7 @@ void render_gb(GlobalBuffer* gb, int t)
     }
 }
 
-
+/*
 float angle = 0.0f;
 
 void draw_tri(Triangulation* tri) {
@@ -1448,38 +1332,6 @@ int main(int argc, char *argv[]) {
     SDL_GLContext ctx = SDL_GL_CreateContext(win);
     glEnable(0x809D);
     glEnable(GL_DEPTH_TEST);
-    printf("D\n");
-    FILE* fin = fopen("../media/models/off/gad.off", "r");
-    if(!fin)
-    {
-        printf("DO\n");
-        return 1;
-    }
-    printf("DFDS\n");
-    Polyhedron* poly = polyhedron_from_off(fin);
-    if (poly == NULL) 
-    {
-        printf("DIE\n");
-        return 1;
-    }
-    printf("DFdDS\n");
-
-
-    Triangulation* tri = empty_triangulation();
-    if (tri == NULL)
-    {
-        printf("DO YOU DIE\n");
-        return 1;
-    }
-    printf("DFdddDS\n");
-
-    if(triangulate_polyhedra(poly, tri) == FAILURE)
-    {
-        printf("TODAY YOU MUST DIE\n");
-        return 1;
-    }
-
-    printf("Data: %d\n", tri->triangle_count);
     SDL_Event e;
     int running = 1;
     while (running) {
