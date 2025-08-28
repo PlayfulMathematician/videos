@@ -1256,6 +1256,7 @@ void free_polyhedron(Polyhedron* poly)
     free(poly->vertices);
     free(poly);
 }
+
 /**
  * @brief This takes a global buffer and renders it
  * @param gb This is the global buffer to be rendered
@@ -1267,39 +1268,43 @@ void render_gb(GlobalBuffer* gb, int t)
 {
     for(int i = 0; i < gb->videodata->section_count; i++)
     {
-        if (gb->videodata->animation_section[i].end_t <= t || gb->videodata->animation_section[i].start_t >= t)
+        AnimationSection* animation_section = &gb->videodata->animation_section[i];
+        if (animation_section->end_t < t)
         {
-            if (t == gb->videodata->animation_section[i].start_t)
-            {
-                gb->videodata->animation_section[i].init(&gb->videodata->animation_section[i]);
-            }
-            if (t == gb->videodata->animation_section[i].end_t)
-            {
-                free(gb->videodata->animation_section[i].animations);
-                free(&gb->videodata->animation_section[i]);
-            }
-            else
-            {
-                for (int j = 0; j < gb->videodata->animation_section[i].animation_count; j++)
-                {
-                    Animation* a = &gb->videodata->animation_section[i].animations[j];
-                    if (a->start_t == t)
-                    {
-                        a->construct(a);
-                    }
-                    if (a->start_t <= t && a->end_t >= t)
-                    {
-                        a->preproc(a, t);
-                        a->render(a, t);
-                        a->postproc(a, t);
-                    }
-                    if (a->end_t == t)
-                    {
-                        a->free(a);
-                    }
-                }
-            }
+            continue;
         }    
+        if (animation_section->start_t > t)
+        {
+            continue;
+        }    
+        if (t == animation_section->start_t)
+        {
+            animation_section->init(animation_section);
+        }
+        if (t == animation_section->end_t)
+        {
+            free(animation_section->animations);
+            free(animation_section);
+            continue;
+        }
+        for (int j = 0; j < animation_section->animation_count; j++)
+        {
+            Animation* a = &animation_section->animations[j];
+            if (a->start_t == t)
+            {
+                a->construct(a);
+            }
+            if (a->start_t <= t && a->end_t >= t)
+            {
+                a->preproc(a, t);
+                a->render(a, t);
+                a->postproc(a, t);
+            }
+            if (a->end_t == t)
+            {
+                a->free(a);
+            }
+        }
     }
 }
 
