@@ -45,9 +45,14 @@
 #include <SDL2/SDL_mixer.h>
 #include <GL/gl.h>
 #include <stdio.h>
+// what is posix
 /// @def EPSILON
 /// @brief Tolerance for floating-point comparisons.
 #define EPSILON 0.0001
+
+/// @def null
+/// @brief I do not want to capitalize NULL
+#define null NULL
 
 /// @def BIT_IGNORE
 /// @brief Alignment granularity in bits (round up to 2^BIT_IGNORE).
@@ -154,16 +159,16 @@ void print_error(int error)
             fprintf(stderr, "When allocating vertices during polyhedron triangulation, malloc failed.\n");
             break;
         case POLYHEDRON_MALLOC_ERROR:
-            fprintf("When allocating a polyhedron, malloc failed\n");
+            fprintf(stderr,"When allocating a polyhedron, malloc failed\n");
             break;
         case POLYHEDRON_VERTEX_MALLOC_ERROR:
-            fprintf("When allocating the vertices of the polyhedron, malloc failed\n");
+            fprintf(stderr, "When allocating the vertices of the polyhedron, malloc failed\n");
             break;
         case POLYHEDRON_FACE_MALLOC_ERROR:
-            fprintf("When allocating the faces of the polyhedron, malloc failed\n");
+            fprintf(stderr,"When allocating the faces of the polyhedron, malloc failed\n");
             break;
-        case POLYHEDRON_FACE_MALLOC_ERROR:
-            fprintf("When allocating the face sizes of the polyhedron, malloc failed\n");
+        case POLYHEDRON_FACE_SIZES_MALLOC_ERROR:
+            fprintf(stderr, "When allocating the face sizes of the polyhedron, malloc failed\n");
             break;
         default:
             fprintf(stderr, "SOMETHING BAD HAPPENED\n");
@@ -453,14 +458,14 @@ Triangulation* empty_triangulation(int* result)
     Triangulation* tri = malloc(sizeof(Triangulation));
     if (!tri)
     {   
-        *result = TRI_INIT_MALLOC_FAIL;
+        *result = TRI_INIT_MALLOC_FAIL; // Soon that attitude will be your doom
         return NULL; 
     }
     tri->triangle_count = 0;
     tri->triangles = NULL;
     return tri;
 
-}
+} 
 
 /**
  * @brief It adds a triangle to a triangulation
@@ -1136,7 +1141,7 @@ void generate_triangulation(int* result, Vec3* vertices, int vertex_count, Trian
     }
     tri->triangle_count = pslgtri->triangulation->triangle_count;
     free_pslg(pslgtri->pslg);
-    free_triangulation(pslgtri->triangulation);
+    free_triangulation(result, pslgtri->triangulation);
     free(pslgtri);
     *result = SUCCESS;
 }
@@ -1164,7 +1169,7 @@ void triangulate_polyhedron(int* result, Polyhedron* poly, Triangulation* out)
         {
             return;
         }
-        Vec3* vertices = malloc(REALIGN(poly->face_sizes[i]) * sizeof(Vec3)); 
+        Vec3* vertices = malloc(BIT_ALIGN(poly->face_sizes[i]) * sizeof(Vec3)); 
         if (!vertices)
         {
             *result = TRIANGULATE_POLYHEDRON_VERTEX_MALLOC_ERROR;
@@ -1213,7 +1218,7 @@ Polyhedron* create_polyhedron(int* result, int nv, int nf)
     if (!poly)
     {
         *result = POLYHEDRON_MALLOC_ERROR;
-        return;
+        return (Polyhedron*)null;
     }
     poly->vertex_count = nv;
     poly->face_count = nf;
@@ -1221,19 +1226,19 @@ Polyhedron* create_polyhedron(int* result, int nv, int nf)
     if (!poly->vertices)
     {
         *result = POLYHEDRON_VERTEX_MALLOC_ERROR;
-        return;
+        return (Polyhedron*)null;
     }
     poly->faces = malloc(nf * sizeof(int*));
     if (!poly->faces)
     {
         *result = POLYHEDRON_FACE_MALLOC_ERROR;
-        return;
+        return (Polyhedron*)null;
     }
     poly->face_sizes = malloc(nf * sizeof(int));
     if (!poly->face_sizes)
     {
         *result = POLYHEDRON_FACE_SIZES_MALLOC_ERROR;
-        return;
+        return (Polyhedron*)null;
     }
     *result = SUCCESS;
     return poly;
@@ -1307,8 +1312,9 @@ void render_gb(GlobalBuffer* gb, int t)
         }
     }
 }
-
-/*
+/**
+ * @todo Parse OFF Files
+ */
 float angle = 0.0f;
 
 void draw_tri(Triangulation* tri) {
@@ -1360,9 +1366,6 @@ int main(int argc, char *argv[]) {
         glLoadIdentity();
         glTranslatef(0,0,-3);
         glRotatef(angle, 1, 1, 0);
-
-        draw_tri(tri);
-
         SDL_GL_SwapWindow(win);
         angle += 0.1f;
     }
@@ -1370,10 +1373,5 @@ int main(int argc, char *argv[]) {
     SDL_GL_DeleteContext(ctx);
     SDL_DestroyWindow(win);
     SDL_Quit();
-}
-*/
-
-int main(int argc, char* argv[])
-{
     return 0;
 }
