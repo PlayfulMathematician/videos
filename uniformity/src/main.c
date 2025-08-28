@@ -515,7 +515,7 @@ void add_triangle(int* result, Triangulation* tri, Vec3 a, Vec3 b, Vec3 c)
 
 void merge_triangulations(int* result, Triangulation** triangulations, int tri_count, Triangulation* output)
 {
-    int* a;
+    int* a = 0;
     Triangulation* e = empty_triangulation(a);
     if (e == NULL)
     {
@@ -535,8 +535,7 @@ void merge_triangulations(int* result, Triangulation** triangulations, int tri_c
     {
         for (int j = 0; j < triangulations[i]->triangle_count; j++)
         {
-            int* out;
-            *out = 0;
+            int* out = 0;
             add_triangle(
                 out,
                 output, 
@@ -873,7 +872,7 @@ void remove_single_edge(int* result, PSLG* pslg)
 
 void split_entirely(int* result, PSLG* pslg)
 {
-    while(1)
+    for(;;)
     {
         remove_single_edge(result, pslg);
         if(*result == NOOP) 
@@ -1082,7 +1081,7 @@ void attack_single_vertex(int* result, PSLGTriangulation* pslgtri)
 
 void attack_all_vertices(int* result, PSLGTriangulation* pslgtri)
 {
-    while(1)
+    for(;;)
     {
         attack_single_vertex(result, pslgtri);
         if(*result == NOOP)
@@ -1346,6 +1345,8 @@ void draw_tri(Triangulation* tri) {
 int main(int argc, char *argv[]) {
     float angle = 0.0f;
     SDL_Init(SDL_INIT_VIDEO);
+    (void)argc;
+    (void)argv;
 
     SDL_GL_SetAttribute(SDL_GL_MULTISAMPLEBUFFERS, 1);
     SDL_GL_SetAttribute(SDL_GL_MULTISAMPLESAMPLES, 4);
@@ -1360,8 +1361,9 @@ int main(int argc, char *argv[]) {
     glEnable(GL_DEPTH_TEST);
     SDL_Event e;
     int running = 1;
-    while (running) {
-        while (SDL_PollEvent(&e))
+    for (;running;) 
+    {
+        for (;SDL_PollEvent(&e);)
         {
             if (e.type == SDL_QUIT) 
             {
