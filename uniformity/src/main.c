@@ -515,8 +515,7 @@ void add_triangle(int* result, Triangulation* tri, Vec3 a, Vec3 b, Vec3 c)
 
 void merge_triangulations(int* result, Triangulation** triangulations, int tri_count, Triangulation* output)
 {
-    int* a = 0;
-    Triangulation* e = empty_triangulation(a);
+    Triangulation* e = empty_triangulation(result);
     if (e == NULL)
     {
         *result = TRI_INIT_MALLOC_FAIL;
@@ -1044,8 +1043,8 @@ void attack_vertex(int* result, PSLGTriangulation* pslgtri, int vertex_idx)
     // time to populate the data
     for (int i = 0; i < ecount; i++)
     {
-        temp[EI][0] = pslg->edges[i][0];
-        temp[EI][1] = pslg->edges[i][1];
+        pslg->edges[i][0] = temp[i][0];
+        pslg->edges[i][1] = temp[i][1];
     }
     free(temp); // this is temporary
     *result = SUCCESS;
@@ -1376,7 +1375,7 @@ int main(int argc, char *argv[])
     Vec3 c;
     c.x = 1;
     c.y = 1;
-    c.z = 1;
+    c.z = 0;
     add_triangle(&result, tri, a, b, c);
 
     int running = 1;
