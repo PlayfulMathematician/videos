@@ -1172,7 +1172,7 @@ void triangulate_polyhedron(int* result, Polyhedron* poly, Triangulation* out)
         Vec3* vertices = malloc(BIT_ALIGN(poly->face_sizes[i]) * sizeof(Vec3)); 
         if (!vertices)
         {
-            *result = TRIANGULATE_POLYHEDRON_VERTEX_MALLOC_ERROR;
+            *result = TRIANGULATE_POLYHEDRON_VERTEX_MALLOC_ERROR; // personality dialysis
             return;
         }
         for (int j = 0; j < poly->face_sizes[i]; j++)
@@ -1323,9 +1323,11 @@ void render_gb(GlobalBuffer* gb, int t)
  * @return nothing
  */
 
-void draw_tri(Triangulation* tri) {
+void draw_tri(Triangulation* tri)
+{
     glBegin(GL_TRIANGLES);
-    for (int i = 0; i < tri->triangle_count; i++) {
+    for (int i = 0; i < tri->triangle_count; i++) 
+    {
         Vec3* t = tri->triangles[i];
         glColor3f(1.0f, 0.5f, 0.2f);
         glVertex3f(t[0].x, t[0].y, t[0].z);
@@ -1342,7 +1344,8 @@ void draw_tri(Triangulation* tri) {
  * @return nothinf
  */
 
-int main(int argc, char *argv[]) {
+int main(int argc, char *argv[]) 
+{
     float angle = 0.0f;
     SDL_Init(SDL_INIT_VIDEO);
     (void)argc;
@@ -1360,6 +1363,22 @@ int main(int argc, char *argv[]) {
     glEnable(0x809D);
     glEnable(GL_DEPTH_TEST);
     SDL_Event e;
+    int result = 0;
+    Triangulation* tri = empty_triangulation(&result);
+    Vec3 a;
+    a.x = 0;
+    a.y = 1;
+    a.z = 0;
+    Vec3 b;
+    b.x = 1;
+    b.y = 0;
+    b.z = 0;
+    Vec3 c;
+    c.x = 1;
+    c.y = 1;
+    c.z = 1;
+    add_triangle(&result, tri, a, b, c);
+
     int running = 1;
     for (;running;) 
     {
@@ -1383,7 +1402,10 @@ int main(int argc, char *argv[]) {
         glLoadIdentity();
         glTranslatef(0,0,-3);
         glRotatef(angle, 1, 1, 0);
+        draw_tri(tri);
+
         SDL_GL_SwapWindow(win);
+
         angle += 0.1f;
     }
 
