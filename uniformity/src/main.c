@@ -53,8 +53,8 @@
 
 /// @def null
 /// @brief I do not want to capitalize NULL
-#define null NULL
-
+#define null ((void*)0)
+#undef NULL
 
 
 
@@ -493,10 +493,10 @@ Triangulation* empty_triangulation(int* result)
     if (!tri)
     {   
         *result = TRI_INIT_MALLOC_FAIL; // Soon that attitude will be your doom
-        return NULL; 
+        return null; 
     }
     tri->triangle_count = 0;
-    tri->triangles = NULL;
+    tri->triangles = null;
     return tri;
 
 } 
@@ -549,7 +549,7 @@ void add_triangle(int* result, Triangulation* tri, Vec3 a, Vec3 b, Vec3 c)
 void merge_triangulations(int* result, Triangulation** triangulations, int tri_count, Triangulation* output)
 {
     Triangulation* e = empty_triangulation(result);
-    if (e == NULL)
+    if (e == null)
     {
         *result = TRI_INIT_MALLOC_FAIL;
         return;
@@ -595,7 +595,7 @@ void merge_triangulations(int* result, Triangulation** triangulations, int tri_c
 void free_triangulation( Triangulation* triangulation)
 {
     free(triangulation->triangles);   
-    triangulation->triangles = NULL;
+    triangulation->triangles = null;
     triangulation->triangle_count = 0;
     free(triangulation);              
 }
@@ -760,7 +760,7 @@ PSLG* generate_pslg(int* result, Vec3* vertices, int vertex_count)
     if(!new)
     {
         *result = PSLG_INIT_MALLOC_ERROR;
-        return NULL;
+        return null;
     }
     new->vertex_count = vertex_count;
     new->edge_count = vertex_count;
@@ -771,7 +771,7 @@ PSLG* generate_pslg(int* result, Vec3* vertices, int vertex_count)
         new->edge_count = 0;
         new->edges = NULL;
         *result = PSLG_VERTEX_MALLOC_ERROR;
-        return NULL;
+        return null;
     }
     for (int i = 0; i < vertex_count; i++)
     {
@@ -785,7 +785,7 @@ PSLG* generate_pslg(int* result, Vec3* vertices, int vertex_count)
         new->vertex_count = 0;
         new->edge_count = 0;
         *result = PSLG_EDGE_MALLOC_ERROR;
-        return NULL;
+        return null;
     }
 
     for (int i = 0; i < vertex_count; i++)
@@ -841,7 +841,7 @@ void splitPSLG(int* result, PSLG* pslg, int edge1, int edge2)
     if (REALIGN(pslg->vertex_count, pslg->vertex_count + 1))
     {
         Vec3* temp_ptr = realloc(pslg->vertices, sizeof(Vec3) * BIT_ALIGN(pslg->vertex_count + 1));
-        if (temp_ptr == NULL)
+        if (temp_ptr == null)
         {
             *result = PSLG_EDGE_SPLIT_VERTEX_REALLOC_ERROR;
             return;
@@ -851,7 +851,7 @@ void splitPSLG(int* result, PSLG* pslg, int edge1, int edge2)
     if (REALIGN(pslg->edge_count, pslg->edge_count + 2))
     {
         int (*temp_ptr)[2] = realloc(pslg->edges, sizeof(int[2]) * BIT_ALIGN(pslg->edge_count + 2));
-        if (temp_ptr == NULL)
+        if (temp_ptr == null)
         {
             *result = PSLG_EDGE_SPLIT_EDGE_REALLOC_ERROR;
             return;
@@ -944,13 +944,13 @@ PSLGTriangulation* create_pslg_triangulation(int* result, PSLG* pslg)
     if (!pslgtri)
     {
         *result = PSLG_TRIANGULATION_INIT_MALLOC_ERROR;
-        return NULL;
+        return null;
     }
     pslgtri->triangulation = empty_triangulation(result);
     if (IS_AN_ERROR(*result))
     {
         free(pslgtri);
-        return NULL;
+        return null;
     }
     pslgtri->pslg = pslg;
     *result = SUCCESS;
@@ -1033,7 +1033,7 @@ void attack_vertex(int* result, PSLGTriangulation* pslgtri, int vertex_idx)
     }
     int ecount = e3_exists ? pslg->edge_count - 2 : pslg->edge_count - 1;
     int (*temp)[2] = malloc(ecount * sizeof(int[2])); // this isn't aligned because it is gonna DIE SOON.
-    if (temp == NULL)
+    if (temp == null)
     {
         *result = PSLG_ATTACK_TEMP_EDGES_MALLOC_ERROR;
         return;
@@ -1066,7 +1066,7 @@ void attack_vertex(int* result, PSLGTriangulation* pslgtri, int vertex_idx)
     if (REALIGN(pslg->edge_count, ecount))
     {
         int (*temp_ptr)[2] = realloc(pslg->edges, BIT_ALIGN(ecount) * sizeof(int[2]));
-        if (temp_ptr == NULL)
+        if (temp_ptr == null)
         {
             *result = PSLG_ATTACK_EDGE_REALLOCATION_ERROR;
             free(temp);
@@ -1472,7 +1472,7 @@ void read_off_header(int* result, FILE* fin, int* nv, int* nf)
         return;
     }
     *nv = atoi(t);
-    t = strtok(NULL, " \t");
+    t = strtok(null, " \t");
     if (!t) 
     {
         *result = OFF_HEADER_DATA_ERROR;
@@ -1506,14 +1506,14 @@ void read_vertex(int* result, FILE* fin, Polyhedron* poly, int vertex_idx)
         return;
     }
     poly->vertices[vertex_idx].x = atof(t);
-    t = strtok(NULL, " \t");
+    t = strtok(null, " \t");
     if (!t) 
     {
         *result = OFF_VERTEX_ERROR;
         return;
     }
     poly->vertices[vertex_idx].y = atof(t);
-    t = strtok(NULL, " \t");
+    t = strtok(null, " \t");
     if (!t) 
     {
         *result = OFF_VERTEX_ERROR;
@@ -1550,7 +1550,7 @@ void read_face(int* result, FILE* fin, Polyhedron* poly, int face_idx)
     poly->faces[face_idx] = malloc(poly->face_sizes[face_idx] * sizeof(int));
     for (int i = 0; i < poly->face_sizes[face_idx]; i++)
     {
-        t = strtok(NULL, " \t");
+        t = strtok(null, " \t");
         if (!t) 
         {
             *result = OFF_FACE_ERROR;
