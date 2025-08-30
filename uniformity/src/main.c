@@ -1597,6 +1597,7 @@ Polyhedron* read_off_into_polyhedron(int* result, FILE* fin)
     }
     return poly;
 }
+
 /**
  * @brief the main function lol
  * @param argc lol
