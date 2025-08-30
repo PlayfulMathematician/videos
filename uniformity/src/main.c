@@ -54,6 +54,12 @@
 /// @def null
 /// @brief I do not want to capitalize NULL
 #define null NULL
+
+
+
+
+
+
 /// @def LINE_LENGTH
 /// @brief The Length of a line 
 #define LINE_LENGTH 1024
@@ -111,10 +117,12 @@
 #define POLYHEDRON_VERTEX_MALLOC_ERROR 0x0300000e ///< When allocating memory for the vertices of a polyhedron, malloc failed
 #define POLYHEDRON_FACE_MALLOC_ERROR 0x0300000f ///< When allocating memory for the faces of a polyhedron, malloc failed
 #define POLYHEDRON_FACE_SIZES_MALLOC_ERROR 0x03000010 ///< When allocating memory for the face sizes of the polyhedron, malloc failed
-#define FILE_NO_CLEAN_LINE_OFF_ERROR 0x03000011
-#define OFF_HEADER_OFF_ERROR 0x03000012
-#define OFF_HEADER_DATA_ERROR 0x03000013
-#define OFF_VERTEX_ERROR 0x03000014
+#define FILE_NO_CLEAN_LINE_OFF_ERROR 0x03000011 ///< When reading an off file, it could not find a clean line
+#define OFF_HEADER_OFF_ERROR 0x03000012 ///< When reading an off file the first part of the off header was absent
+#define OFF_HEADER_DATA_ERROR 0x03000013 ///< When reading an off file the second part of the off header was absent
+#define OFF_VERTEX_ERROR 0x03000014 ///< Reading a vertex of an off file failed
+#define OFF_FACE_ERROR 0x03000015 ///< Reading a face of an off file failed
+
 
 /** 
  * @brief Print out the error 
@@ -192,6 +200,9 @@ void print_error(int error)
             break;
         case OFF_VERTEX_ERROR:
             fprintf(stderr, "When reading a vertex from an off file something went wrong\n");
+            break;
+        case OFF_FACE_ERROR:
+            fprintf(stderr, "When reading a face from an off file something went wrong\n");
             break;
         default:
             fprintf(stderr, "SOMETHING BAD HAPPENED\n");
@@ -1210,14 +1221,16 @@ void triangulate_polyhedron(int* result, Polyhedron* poly, Triangulation* out)
         *result = TRIANGULATE_POLYHEDRON_BATCH_TRIANGULATIONS_MALLOC_ERROR;
         goto cleanup;
     }
+    Triangulation* t;
+    Vec3* vertices;
     for (int i = 0; i < poly->face_count; i++)
     {   
-        Triangulation* t = empty_triangulation(result);
+        t = empty_triangulation(result);
         if (IS_AN_ERROR(*result))
         {
             goto cleanup;
         }
-        Vec3* vertices = malloc(BIT_ALIGN(poly->face_sizes[i]) * sizeof(Vec3)); 
+        vertices = malloc(BIT_ALIGN(poly->face_sizes[i]) * sizeof(Vec3)); 
         if (!vertices)
         {
             *result = TRIANGULATE_POLYHEDRON_VERTEX_MALLOC_ERROR; // personality dialysis
@@ -1272,46 +1285,6 @@ void triangulate_polyhedron(int* result, Polyhedron* poly, Triangulation* out)
 }
 
 /**
- * @brief This allocates memory for a polyhedron
- * @param[out] result This is the status of this function
- * @param nv The vertex count
- * @param nf The face count
- * @return A pointer to your brand new polyhedron
- */
-
-Polyhedron* create_polyhedron(int* result, int nv, int nf) 
-{
-    Polyhedron* poly = malloc(sizeof(Polyhedron));
-    if (!poly)
-    {
-        *result = POLYHEDRON_MALLOC_ERROR;
-        return (Polyhedron*)null;
-    }
-    poly->vertex_count = nv;
-    poly->face_count = nf;
-    poly->vertices = malloc(nv * sizeof(Vec3));
-    if (!poly->vertices)
-    {
-        *result = POLYHEDRON_VERTEX_MALLOC_ERROR;
-        return (Polyhedron*)null;
-    }
-    poly->faces = malloc(nf * sizeof(int*));
-    if (!poly->faces)
-    {
-        *result = POLYHEDRON_FACE_MALLOC_ERROR;
-        return (Polyhedron*)null;
-    }
-    poly->face_sizes = malloc(nf * sizeof(int));
-    if (!poly->face_sizes)
-    {
-        *result = POLYHEDRON_FACE_SIZES_MALLOC_ERROR;
-        return (Polyhedron*)null;
-    }
-    *result = SUCCESS;
-    return poly;
-}
-
-/**
  * @brief This takes a polyhedron and frees it
  * @param poly This is the polyhedron to be freed
  * @return nothing
@@ -1327,6 +1300,49 @@ void free_polyhedron(Polyhedron* poly)
     free(poly->faces);
     free(poly->vertices);
     free(poly);
+}
+
+/**
+ * @brief This allocates memory for a polyhedron
+ * @param[out] result This is the status of this function
+ * @param nv The vertex count
+ * @param nf The face count
+ * @return A pointer to your brand new polyhedron
+ */
+
+Polyhedron* create_polyhedron(int* result, int nv, int nf) 
+{
+    Polyhedron* poly = malloc(sizeof(Polyhedron));
+    if (!poly)
+    {
+        *result = POLYHEDRON_MALLOC_ERROR;
+        goto clean;
+    }
+    poly->vertex_count = nv;
+    poly->face_count = nf;
+    poly->vertices = malloc(nv * sizeof(Vec3));
+    if (!poly->vertices)
+    {
+        *result = POLYHEDRON_VERTEX_MALLOC_ERROR;
+        goto clean;
+    }
+    poly->faces = malloc(nf * sizeof(int*));
+    if (!poly->faces)
+    {
+        *result = POLYHEDRON_FACE_MALLOC_ERROR;
+        goto clean;
+    }
+    poly->face_sizes = malloc(nf * sizeof(int));
+    if (!poly->face_sizes)
+    {
+        *result = POLYHEDRON_FACE_SIZES_MALLOC_ERROR;
+        goto clean;
+    }
+    *result = SUCCESS;
+    return poly;
+    clean:
+        free_polyhedron(poly);
+        return (Polyhedron*)null;
 }
 
 /**
@@ -1507,7 +1523,85 @@ void read_vertex(int* result, FILE* fin, Polyhedron* poly, int vertex_idx)
     *result = SUCCESS;
 }
 
+/**
+ * @brief Reading faces
+ * @param[out] result result
+ * @param fin File
+ * @param poly The polyhedron to write to
+ * @param face_idx The index
+ * @return nothing
+ */
 
+void read_face(int* result, FILE* fin, Polyhedron* poly, int face_idx)
+{
+    char line[LINE_LENGTH];
+    read_clean_line(result, fin, line);
+    if (IS_AN_ERROR(*result))
+    {
+        return;
+    }
+    char* t = strtok(line, " \t");
+    if (!t) 
+    {
+        *result = OFF_FACE_ERROR;
+        return;
+    }
+    poly->face_sizes[face_idx] = atoi(t);
+    poly->faces[face_idx] = malloc(poly->face_sizes[face_idx] * sizeof(int));
+    for (int i = 0; i < poly->face_sizes[face_idx]; i++)
+    {
+        t = strtok(NULL, " \t");
+        if (!t) 
+        {
+            *result = OFF_FACE_ERROR;
+            return;
+        }
+        poly->faces[face_idx][i] = atoi(t);
+    }
+    *result = SUCCESS;
+}
+
+/**
+ * @brief Read OFF File and parse it into a polyhedron
+ * @param[out] result The error code
+ * @param fin
+ * @return The polyhedron
+ */
+
+Polyhedron* read_off_into_polyhedron(int* result, FILE* fin)
+{
+    int nv = 0;
+    int nf = 0;
+    read_off_header(result, fin, &nv, &nf);
+    if (IS_AN_ERROR(*result))
+    {
+        return null;
+    }
+    Polyhedron* poly = create_polyhedron(result, nv, nf);
+    if (IS_AN_ERROR(*result))
+    {
+        return null;
+    }
+    for (int i = 0; i < nv; i++) 
+    {
+        read_vertex(result, fin, poly, i);
+        if (IS_AN_ERROR(*result))
+        {
+            free_polyhedron(poly);
+            return null;
+        }
+    }
+    for (int i = 0; i < nf; i++) 
+    {
+        read_face(result, fin, poly, i);
+        if (IS_AN_ERROR(*result))
+        {
+            free_polyhedron(poly);
+            return null;
+        }
+    }
+    return poly;
+}
 /**
  * @brief the main function lol
  * @param argc lol
@@ -1533,9 +1627,6 @@ int main(int argc, char *argv[])
     glEnable(0x809D);
     glEnable(GL_DEPTH_TEST);
     SDL_Event e;
-    
-
-
     int running = 1;
     for (;running;) 
     {
@@ -1555,8 +1646,7 @@ int main(int argc, char *argv[])
         glMatrixMode(GL_MODELVIEW);
         glLoadIdentity();
         glTranslatef(0,0,-3);
-        glRotatef(angle, 1, 1, 0);
-        draw_tri(tri);
+        glRotatef(1, 1, 1, 0);
         SDL_GL_SwapWindow(win);
     }
 
