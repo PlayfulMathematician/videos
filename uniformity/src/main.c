@@ -55,11 +55,6 @@
 /// @brief I do not want to capitalize NULL
 #define null ((void*)0)
 #undef NULL
-
-
-
-
-
 /// @def LINE_LENGTH
 /// @brief The Length of a line 
 #define LINE_LENGTH 1024
