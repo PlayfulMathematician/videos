@@ -54,10 +54,16 @@
 /// @def null
 /// @brief I do not want to capitalize NULL
 #define null NULL
+/// @def LINE_LENGTH
+/// @brief The Length of a line 
+#define LINE_LENGTH 1024
 
 /// @def BIT_IGNORE
 /// @brief Alignment granularity in bits (round up to 2^BIT_IGNORE).
 #define BIT_IGNORE 4
+/// @def SHRINK_BIT_IGNORE
+/// @brief When shrinking data this is the new alignment  
+#define SHRINK_BIT_IGNORE 5
 
 /// @def BIT_ALIGN(x)
 /// @brief Round x up to nearest aligned multiple.
@@ -105,6 +111,10 @@
 #define POLYHEDRON_VERTEX_MALLOC_ERROR 0x0300000e ///< When allocating memory for the vertices of a polyhedron, malloc failed
 #define POLYHEDRON_FACE_MALLOC_ERROR 0x0300000f ///< When allocating memory for the faces of a polyhedron, malloc failed
 #define POLYHEDRON_FACE_SIZES_MALLOC_ERROR 0x03000010 ///< When allocating memory for the face sizes of the polyhedron, malloc failed
+#define FILE_NO_CLEAN_LINE_OFF_ERROR 0x03000011
+#define OFF_HEADER_OFF_ERROR 0x03000012
+#define OFF_HEADER_DATA_ERROR 0x03000013
+#define OFF_VERTEX_ERROR 0x03000014
 
 /** 
  * @brief Print out the error 
@@ -170,6 +180,18 @@ void print_error(int error)
             break;
         case POLYHEDRON_FACE_SIZES_MALLOC_ERROR:
             fprintf(stderr, "When allocating the face sizes of the polyhedron, malloc failed\n");
+            break;
+        case FILE_NO_CLEAN_LINE_OFF_ERROR:
+            fprintf(stderr, "When reading an off file and trying to find a clean line, there was non.\n");
+            break;
+        case OFF_HEADER_OFF_ERROR:
+            fprintf(stderr, "When reading and OFF file the \"OFF\" part of the header was excluded\n");
+            break;
+        case OFF_HEADER_DATA_ERROR:
+            fprintf(stderr, "When reading the actaul data of an off file header, (so vertex count and edge count) it was missing. \n");
+            break;
+        case OFF_VERTEX_ERROR:
+            fprintf(stderr, "When reading a vertex from an off file something went wrong\n");
             break;
         default:
             fprintf(stderr, "SOMETHING BAD HAPPENED\n");
@@ -559,13 +581,12 @@ void merge_triangulations(int* result, Triangulation** triangulations, int tri_c
  * @return nothing
  */
 
-void free_triangulation(int* result, Triangulation* triangulation)
+void free_triangulation( Triangulation* triangulation)
 {
     free(triangulation->triangles);   
     triangulation->triangles = NULL;
     triangulation->triangle_count = 0;
     free(triangulation);              
-    *result = SUCCESS; // I genuinely could not think of a way for free to fail. 
 }
 
 /**
@@ -801,7 +822,7 @@ void splitPSLG(int* result, PSLG* pslg, int edge1, int edge2)
             v4,
             &out
         );
-    if (intersection == 1)
+    if (intersection == 0)
     {
         *result = NOOP;
         return;
@@ -1028,6 +1049,9 @@ void attack_vertex(int* result, PSLGTriangulation* pslgtri, int vertex_idx)
         temp[EI][0] = v1;
         temp[EI][1] = v2;
     }
+    #pragma push_macro("BIT_IGNORE")
+    #undef BIT_IGNORE
+    #define BIT_IGNORE SHRINK_BIT_IGNORE
     if (REALIGN(pslg->edge_count, ecount))
     {
         int (*temp_ptr)[2] = realloc(pslg->edges, BIT_ALIGN(ecount) * sizeof(int[2]));
@@ -1035,10 +1059,12 @@ void attack_vertex(int* result, PSLGTriangulation* pslgtri, int vertex_idx)
         {
             *result = PSLG_ATTACK_EDGE_REALLOCATION_ERROR;
             free(temp);
+            #pragma pop_macro("BIT_IGNORE")
             return;
         }
         pslg->edges = temp_ptr;
     }
+    #pragma pop_macro("BIT_IGNORE")
     pslg->edge_count = ecount;
     // time to populate the data
     for (int i = 0; i < ecount; i++)
@@ -1108,21 +1134,25 @@ void generate_triangulation(int* result, Vec3* vertices, int vertex_count, Trian
     PSLG* pslg = generate_pslg(result, vertices, vertex_count);
     if (IS_AN_ERROR(*result))
     {
+        goto cleanup;
         return;
     }
     split_entirely(result, pslg);
     if (IS_AN_ERROR(*result))
     {
+        goto cleanup;
         return;
     }
     PSLGTriangulation* pslgtri = create_pslg_triangulation(result, pslg);
     if (IS_AN_ERROR(*result))
     {
+        goto cleanup;
         return;
     }
     attack_all_vertices(result, pslgtri);
     if (IS_AN_ERROR(*result))
     {
+        goto cleanup;
         return;
     }
 
@@ -1135,14 +1165,33 @@ void generate_triangulation(int* result, Vec3* vertices, int vertex_count, Trian
         );
         if (IS_AN_ERROR(*result))
         {
+            goto cleanup;
             return;
         }
     }
     tri->triangle_count = pslgtri->triangulation->triangle_count;
     free_pslg(pslgtri->pslg);
-    free_triangulation(result, pslgtri->triangulation);
+    free_triangulation(pslgtri->triangulation);
     free(pslgtri);
     *result = SUCCESS;
+    return;
+    cleanup:
+    {
+        if (pslg)
+        {
+            free_pslg(pslg);
+        }
+        if (pslgtri)
+        {
+            free_triangulation(pslgtri->triangulation);
+            free(pslgtri);
+        }
+        if (tri)
+        {
+            free_triangulation(tri);
+        }
+    }
+    return;
 }
 
 /**
@@ -1159,20 +1208,21 @@ void triangulate_polyhedron(int* result, Polyhedron* poly, Triangulation* out)
     if (!tris)
     {
         *result = TRIANGULATE_POLYHEDRON_BATCH_TRIANGULATIONS_MALLOC_ERROR;
-        return;
+        goto cleanup;
     }
     for (int i = 0; i < poly->face_count; i++)
     {   
         Triangulation* t = empty_triangulation(result);
         if (IS_AN_ERROR(*result))
         {
-            return;
+            goto cleanup;
         }
         Vec3* vertices = malloc(BIT_ALIGN(poly->face_sizes[i]) * sizeof(Vec3)); 
         if (!vertices)
         {
             *result = TRIANGULATE_POLYHEDRON_VERTEX_MALLOC_ERROR; // personality dialysis
-            return;
+            goto cleanup;
+
         }
         for (int j = 0; j < poly->face_sizes[i]; j++)
         {
@@ -1181,7 +1231,7 @@ void triangulate_polyhedron(int* result, Polyhedron* poly, Triangulation* out)
         generate_triangulation(result, vertices, poly->face_sizes[i], t);
         if (IS_AN_ERROR(*result))
         {
-            return;
+            goto cleanup;
         }
         free(vertices);
         tris[i] = t;
@@ -1189,18 +1239,36 @@ void triangulate_polyhedron(int* result, Polyhedron* poly, Triangulation* out)
     merge_triangulations(result, tris, poly->face_count, out);
     if (IS_AN_ERROR(*result))
     {
+        
         return;
     }
     for(int i = 0; i < poly->face_count; i++)
     {
-        free_triangulation(result, tris[i]);
-        if (IS_AN_ERROR(*result))
-        {
-            return;
-        }
+        free_triangulation(tris[i]);
     }
     free(tris);
     *result = SUCCESS;
+    return;
+    cleanup:
+        for (int i = 0 ; i < poly->face_count; i++)
+        {
+            free_triangulation(tris[i]);
+        }
+        free(tris);
+        if (vertices)
+        {
+            free(vertices);
+        }
+        if (t)
+        {
+            free_triangulation(t);
+        }
+        if (out)
+        {
+            free_triangulation(out);
+        }
+    return;
+        
 }
 
 /**
@@ -1315,26 +1383,130 @@ void render_gb(GlobalBuffer* gb, int t)
  * @todo Parse OFF Files
  */
 
+/**
+ * @brief Do not touch
+ * @param[out] result You know
+ * @param fin The file
+ * @param buf The output
+ * @return nothing
+
+ */
+
+void read_clean_line(int* result, FILE* fin, char* buf)
+{
+    while (fgets(buf, LINE_LENGTH, fin)) 
+    {
+        buf[strcspn(buf, "\r\n")] = 0;             
+        char* h = strchr(buf, '#'); 
+        if (h) 
+        {
+            *h = 0;
+        }
+        char* p = buf + strspn(buf, " \t"); 
+        size_t n = strlen(p);
+        while (n && (p[n-1]==' ' || p[n-1]=='\t'))
+        {
+            p[--n] = 0;
+        }
+        if (*p == 0) 
+        {
+            continue;            
+        }         
+        if (p != buf)
+        {
+            memmove(buf, p, n+1);  
+        }
+        *result = SUCCESS;
+        return;
+    }
+    *result = FILE_NO_CLEAN_LINE_OFF_ERROR;
+}
 
 /**
- * @brief This draws a triangulation
- * @param tri This is the triangulation to be drawn
+ * @brief Reading off header
+ * @param[out] result result
+ * @param fin the file
+ * @param nv The number of vertices to be written to
+ * @param nf The number of faces
  * @return nothing
  */
 
-void draw_tri(Triangulation* tri)
+void read_off_header(int* result, FILE* fin, int* nv, int* nf)
 {
-    glBegin(GL_TRIANGLES);
-    for (int i = 0; i < tri->triangle_count; i++) 
+    char line[LINE_LENGTH];
+    read_clean_line(result, fin, line);
+    if (IS_AN_ERROR(*result))
     {
-        Vec3* t = tri->triangles[i];
-        glColor3f(1.0f, 0.5f, 0.2f);
-        glVertex3f(t[0].x, t[0].y, t[0].z);
-        glVertex3f(t[1].x, t[1].y, t[1].z);
-        glVertex3f(t[2].x, t[2].y, t[2].z);
+        return;
     }
-    glEnd();
+    if (strcmp(line , "OFF") != 0)
+    {
+        *result = OFF_HEADER_OFF_ERROR;
+        return;
+    }
+    read_clean_line(result, fin, line);
+    if (IS_AN_ERROR(*result))
+    {
+        return;
+    }
+    char* t = strtok(line, " \t");
+    if (!t) 
+    {
+        *result = OFF_HEADER_DATA_ERROR;
+        return;
+    }
+    *nv = atoi(t);
+    t = strtok(NULL, " \t");
+    if (!t) 
+    {
+        *result = OFF_HEADER_DATA_ERROR;
+        return;
+    }
+    *nf = atoi(t);
+    *result = SUCCESS;
 }
+
+/**
+ * @brief Reading vertex
+ * @param[out] result result
+ * @param fin the file
+ * @param poly The polyhedron to write to
+ * @param vertex_idx The index to write to
+ * @return nothing
+ */
+
+void read_vertex(int* result, FILE* fin, Polyhedron* poly, int vertex_idx)
+{
+    char line[LINE_LENGTH];
+    read_clean_line(result, fin, line);
+    if (IS_AN_ERROR(*result))
+    {
+        return;
+    }
+    char* t = strtok(line, " \t");
+    if (!t) 
+    {
+        *result = OFF_VERTEX_ERROR;
+        return;
+    }
+    poly->vertices[vertex_idx].x = atof(t);
+    t = strtok(NULL, " \t");
+    if (!t) 
+    {
+        *result = OFF_VERTEX_ERROR;
+        return;
+    }
+    poly->vertices[vertex_idx].y = atof(t);
+    t = strtok(NULL, " \t");
+    if (!t) 
+    {
+        *result = OFF_VERTEX_ERROR;
+        return;
+    }
+    poly->vertices[vertex_idx].z = atof(t);
+    *result = SUCCESS;
+}
+
 
 /**
  * @brief the main function lol
@@ -1345,7 +1517,6 @@ void draw_tri(Triangulation* tri)
 
 int main(int argc, char *argv[]) 
 {
-    float angle = 0.0f;
     SDL_Init(SDL_INIT_VIDEO);
     (void)argc;
     (void)argv;
@@ -1362,21 +1533,8 @@ int main(int argc, char *argv[])
     glEnable(0x809D);
     glEnable(GL_DEPTH_TEST);
     SDL_Event e;
-    int result = 0;
-    Triangulation* tri = empty_triangulation(&result);
-    Vec3 a;
-    a.x = 0;
-    a.y = 1;
-    a.z = 0;
-    Vec3 b;
-    b.x = 1;
-    b.y = 0;
-    b.z = 0;
-    Vec3 c;
-    c.x = 1;
-    c.y = 1;
-    c.z = 0;
-    add_triangle(&result, tri, a, b, c);
+    
+
 
     int running = 1;
     for (;running;) 
@@ -1388,24 +1546,18 @@ int main(int argc, char *argv[])
                 running = 0;
             }
         }
-
         glClearColor(0.0f,0.0f,0.0f,1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
         glMatrixMode(GL_PROJECTION);
         glLoadIdentity();
         float aspect = 800.0f/600.0f;
         glFrustum(-1*aspect, 1*aspect, -1, 1, 1, 10);
-
         glMatrixMode(GL_MODELVIEW);
         glLoadIdentity();
         glTranslatef(0,0,-3);
         glRotatef(angle, 1, 1, 0);
         draw_tri(tri);
-
         SDL_GL_SwapWindow(win);
-
-        angle += 0.1f;
     }
 
     SDL_GL_DeleteContext(ctx);

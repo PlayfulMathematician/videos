@@ -8,11 +8,11 @@
 *.ent
 *.exe
 *.off
+*.dll
 __pycache__
 # Visual Studio Code and Jetbrains IDE stuff
 .idea
 .vscode
 # Thumbnails
 Thumbs.db
-*.dll
 uniformity/src/docs

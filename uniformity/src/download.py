@@ -42,6 +42,7 @@ def e(url, depth=3):
     file=soup.find("div", id="file").findChildren()[0].get("href")
     return [file, author]
     
+
 def main(): 
     try:
         os.mkdir("../media/models")
@@ -55,7 +56,7 @@ def main():
         if z[1] not in contributors:
             contributors.append(z[1])
 
-        with open("../media/models/" + i[1], "w") as q:
+        with open("../media/models/" + i[1] + ".off", "w") as q:
             j = requests.get("https:"+z[0], headers=headers)
             j.raise_for_status()
             q.write(j.text)
