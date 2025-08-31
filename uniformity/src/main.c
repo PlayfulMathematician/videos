@@ -49,7 +49,7 @@
 // what is posix
 /// @def EPSILON
 /// @brief Tolerance for floating-point comparisons.
-#define EPSILON 0.0001
+#define EPSILON 0.000001
 
 /// @def null
 /// @brief I do not want to capitalize NULL
@@ -562,17 +562,15 @@ void merge_triangulations(int* result, Triangulation** triangulations, int tri_c
     {
         for (int j = 0; j < triangulations[i]->triangle_count; j++)
         {
-            int* out = 0;
             add_triangle(
-                out,
+                result,
                 output, 
                 triangulations[i]->triangles[j][0],
                 triangulations[i]->triangles[j][1],
                 triangulations[i]->triangles[j][2]
             );
-            if (IS_AN_ERROR(*out))
+            if (IS_AN_ERROR(*result))
             {
-                *result = *out;
                 return;
             }
         }
@@ -665,6 +663,8 @@ Vec3 lerp_vec3(Vec3 a, Vec3 b, float t)
 
 int intersecting_segments(Vec3 a, Vec3 b, Vec3 c, Vec3 d, Vec3* out)
 {
+    
+
     
     if (a.x == b.x && a.y == b.y && c.x == d.x && c.y == d.y)
     {
@@ -764,7 +764,7 @@ PSLG* generate_pslg(int* result, Vec3* vertices, int vertex_count)
     {
         new->vertex_count = 0;
         new->edge_count = 0;
-        new->edges = NULL;
+        new->edges = null;
         *result = PSLG_VERTEX_MALLOC_ERROR;
         return null;
     }
@@ -833,6 +833,7 @@ void splitPSLG(int* result, PSLG* pslg, int edge1, int edge2)
         *result = NOOP;
         return;
     }
+
     if (REALIGN(pslg->vertex_count, pslg->vertex_count + 1))
     {
         Vec3* temp_ptr = realloc(pslg->vertices, sizeof(Vec3) * BIT_ALIGN(pslg->vertex_count + 1));
@@ -879,11 +880,10 @@ void remove_single_edge(int* result, PSLG* pslg)
         for(int j = 0; j < pslg->edge_count; j++)
         {
             splitPSLG(result, pslg, i, j);
-            if(*result == NOOP)
+            if(*result != NOOP)
             {
-                continue;
+                return;
             }
-            return;
         }
     }
     *result = NOOP;
@@ -1039,7 +1039,6 @@ void attack_vertex(int* result, PSLGTriangulation* pslgtri, int vertex_idx)
         // sacrifice e1, and e2
         if (i == e1 || i == e2)
         {
-            EI++;
             continue;
         }
         temp[EI][0] = pslg->edges[i][0];
@@ -1094,6 +1093,10 @@ void attack_single_vertex(int* result, PSLGTriangulation* pslgtri)
     for(int i = 0; i < pslgtri->pslg->vertex_count; i++)
     {
         attack_vertex(result, pslgtri, i);
+        if (*result == SUCCESS)
+        {
+            return;
+        }
         if(*result == NOOP)
         {
             continue;
@@ -1118,6 +1121,7 @@ void attack_all_vertices(int* result, PSLGTriangulation* pslgtri)
         if(*result == NOOP)
         {
             *result = SUCCESS;
+            return;
         }
         if (IS_AN_ERROR(*result))
         {
@@ -1607,6 +1611,29 @@ Polyhedron* read_off_into_polyhedron(int* result, FILE* fin)
 
 int main(int argc, char *argv[]) 
 {
+    int result = SUCCESS;
+    FILE* fin = fopen("../media/models/sissid.off", "r");
+    Polyhedron* poly = read_off_into_polyhedron(&result, fin);
+    fclose(fin);
+
+    if (IS_AN_ERROR(result))
+    {
+        print_error(result);
+        return 1;
+    }
+    Triangulation* tri = empty_triangulation(&result);
+    if (IS_AN_ERROR(result))
+    {
+        print_error(result);
+        return 1;
+    }
+
+    triangulate_polyhedron(&result, poly, tri);
+    if (IS_AN_ERROR(result))
+    {
+        print_error(result);
+        return 1;
+    }
     SDL_Init(SDL_INIT_VIDEO);
     (void)argc;
     (void)argv;
