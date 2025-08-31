@@ -901,7 +901,7 @@ void dedup_pslg_a_vertex(int* result, PSLG* pslg, int v1, int v2)
         }
         if (pslg->edges[i][1] == v2)
         {
-            pslg->edges[i][1] = v2;
+            pslg->edges[i][1] = v1;
         }
         if (pslg->edges[i][0] > v2)
         {
@@ -983,12 +983,13 @@ void dedup_pslg_a_edge(int* result, PSLG* pslg, int e1, int e2)
         return;
     }
     
+    bool b = false;
+
     if (equal_vec3(pslg->vertices[pslg->edges[e1][0]], pslg->vertices[pslg->edges[e2][0]]))
     {
         if (equal_vec3(pslg->vertices[pslg->edges[e1][1]], pslg->vertices[pslg->edges[e2][1]]))
         {
-            *result = NOOP;
-            return;
+            b = true;
         }
     }
 
@@ -996,9 +997,14 @@ void dedup_pslg_a_edge(int* result, PSLG* pslg, int e1, int e2)
     {
         if (equal_vec3(pslg->vertices[pslg->edges[e1][1]], pslg->vertices[pslg->edges[e2][0]]))
         {
-            *result = NOOP;
-            return;
+            b = true;
         }
+    }
+    
+    if(!b)
+    {
+        *result = NOOP;
+        return;
     }
 
     
@@ -1505,6 +1511,7 @@ void generate_triangulation(int* result, Vec3* vertices, int vertex_count, Trian
     return;
     cleanup:
     {
+        print_error(*result);
         printf("GRRR\n");
         if (pslg)
         {
