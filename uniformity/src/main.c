@@ -1955,9 +1955,9 @@ int main(int argc, char *argv[])
     }
     for (int i = 0; i < tri->triangle_count; i++)
     {
-        printf("A: %f %f %f\n", tri->triangles[0]->x, tri->triangles[0]->y, tri->triangles[0]->z);
-        printf("B: %f %f %f\n", tri->triangles[1]->x, tri->triangles[1]->y, tri->triangles[1]->z);
-        printf("C: %f %f %f\n", tri->triangles[2]->x, tri->triangles[2]->y, tri->triangles[2]->z);
+        printf("A: %f %f %f\n", tri->triangles[i][0].x, tri->triangles[i][0].y, tri->triangles[i][0].z);
+        printf("B: %f %f %f\n", tri->triangles[i][1].x, tri->triangles[i][1].y, tri->triangles[i][1].z);
+        printf("C: %f %f %f\n", tri->triangles[i][2].x, tri->triangles[i][2].y, tri->triangles[i][2].z);
     }
     SDL_Init(SDL_INIT_VIDEO);
     (void)argc;
