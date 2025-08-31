@@ -662,10 +662,7 @@ Vec3 lerp_vec3(Vec3 a, Vec3 b, float t)
  */
 
 int intersecting_segments(Vec3 a, Vec3 b, Vec3 c, Vec3 d, Vec3* out)
-{
-    
-
-    
+{    
     if (a.x == b.x && a.y == b.y && c.x == d.x && c.y == d.y)
     {
         return 0;
@@ -673,20 +670,37 @@ int intersecting_segments(Vec3 a, Vec3 b, Vec3 c, Vec3 d, Vec3* out)
     float tx; 
     float ty;
     int vertical = 0;
+    float denom1;
+    float denom2;
     if (a.x == b.x && a.y == b.y)
     {
-        tx = (a.x - c.x) / (d.x - c.x);
-        ty = (a.y - c.y) / (d.y - c.y);
+        tx = (a.x - c.x);
+        ty = (a.y - c.y);
+        denom1 = (d.y - c.y);
+        denom2 = d.x - d.y;
         vertical = 1;
     }
     if (c.x == d.x && c.y == d.y)
     {
-        tx = (c.x - a.x) / (b.x - a.x);
-        ty = (c.y - a.y) / (b.y - a.y);
+        tx = (c.x - a.x);
+        ty = (c.y - a.y);
+        denom1 = b.y - a.y;
+        denom2 = b.x - a.x;
         vertical = 2;
     }
     if (vertical > 0)
     {
+        if (fabs(denom1) < EPSILON)
+        {
+            return 0;
+        }
+        if (fabs(denom2) < EPSILON)
+        {
+            return 0;
+        }
+        
+        tx /= denom2;
+        ty /= denom1;
         if (tx < 0 || tx > 1)
         {
             return 0;
@@ -695,6 +709,7 @@ int intersecting_segments(Vec3 a, Vec3 b, Vec3 c, Vec3 d, Vec3* out)
         {
             return 0;
         }
+        
         float t_avg;
         if (fabs(tx - ty) < EPSILON)
         {
@@ -1141,6 +1156,7 @@ void attack_all_vertices(int* result, PSLGTriangulation* pslgtri)
 
 void generate_triangulation(int* result, Vec3* vertices, int vertex_count, Triangulation* tri)
 {
+    printf("I HATE YOU\n");
     PSLG* pslg = generate_pslg(result, vertices, vertex_count);
     if (IS_AN_ERROR(*result))
     {
@@ -1180,13 +1196,16 @@ void generate_triangulation(int* result, Vec3* vertices, int vertex_count, Trian
         }
     }
     tri->triangle_count = pslgtri->triangulation->triangle_count;
+
     free_pslg(pslgtri->pslg);
     free_triangulation(pslgtri->triangulation);
     free(pslgtri);
     *result = SUCCESS;
+    printf("%i \n", tri->triangle_count);
     return;
     cleanup:
     {
+        printf("GRRR\n");
         if (pslg)
         {
             free_pslg(pslg);
@@ -1633,6 +1652,13 @@ int main(int argc, char *argv[])
     {
         print_error(result);
         return 1;
+    }
+
+    for (int i = 0; i < tri->triangle_count; i++)
+    {
+        printf("A: %f %f %f\n", tri->triangles[0]->x, tri->triangles[0]->y, tri->triangles[0]->z);
+        printf("B: %f %f %f\n", tri->triangles[1]->x, tri->triangles[1]->y, tri->triangles[1]->z);
+        printf("C: %f %f %f\n", tri->triangles[2]->x, tri->triangles[2]->y, tri->triangles[2]->z);
     }
     SDL_Init(SDL_INIT_VIDEO);
     (void)argc;

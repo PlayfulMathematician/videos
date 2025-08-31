@@ -20,3 +20,4 @@ USE_PDFLATEX           = YES
 LATEX_BATCHMODE        = NO
 PDF_HYPERLINKS         = YES
 OUTPUT_DIRECTORY       = docs
+ 
