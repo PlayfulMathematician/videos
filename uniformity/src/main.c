@@ -37,6 +37,7 @@
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 #include <stdio.h>
+#include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
@@ -117,6 +118,9 @@
 #define OFF_HEADER_DATA_ERROR 0x03000013 ///< When reading an off file the second part of the off header was absent
 #define OFF_VERTEX_ERROR 0x03000014 ///< Reading a vertex of an off file failed
 #define OFF_FACE_ERROR 0x03000015 ///< Reading a face of an off file failed
+#define DEDUP_PSLG_VERTEX_REALLOC_ERROR 0x03000016 ///< When deduplicating pslg vertices memory reallocation failed.
+#define DEDUP_PSLG_EDGES_REALLOC_ERROR 0x03000017 ///< When deduplicating pslg edges memory reallocation failed.
+
 
 
 /** 
@@ -198,6 +202,12 @@ void print_error(int error)
             break;
         case OFF_FACE_ERROR:
             fprintf(stderr, "When reading a face from an off file something went wrong\n");
+            break;
+        case DEDUP_PSLG_VERTEX_REALLOC_ERROR:
+            fprintf(stderr, "When deduplicating the PSLG vertices, realloc failed\n");
+            break;
+        case DEDUP_PSLG_EDGES_REALLOC_ERROR:
+            fprintf(stderr, "When deduplicating the PSLG edges, realloc failed\n");
             break;
         default:
             fprintf(stderr, "SOMETHING BAD HAPPENED\n");
@@ -637,7 +647,6 @@ Vec3 subtract_vec3(Vec3 a, Vec3 b)
     return add_vec3(a, multiply_vec3(b, -1.0f));
 }
 
-
 /**
  * @brief This interpolates between two vectors
  * @param a This is the starting vector
@@ -650,6 +659,41 @@ Vec3 lerp_vec3(Vec3 a, Vec3 b, float t)
 {
     return add_vec3(a, multiply_vec3(subtract_vec3(b, a), t));
 }
+
+/**
+ * @brief 
+ * @param v The vector to be subtracteed from
+ * @return This outputs the magnitude of v
+ */
+
+float magnitude_vec3(Vec3 a)
+{
+    return sqrt(a.x*a.x + a.y*a.y + a.z*a.z);
+}
+
+/**
+ * @brief This is the distance between two points
+ * @param a the first one
+ * @param b The second one
+ * @return The distance
+ */
+
+float dist_vec3(Vec3 a, Vec3 b)
+{
+    return magnitude_vec3(subtract_vec3(a, b));
+} 
+
+/**
+ * @brief This outputs whether or not two vectors are equal
+ * @param a the first one
+ * @param b The second one
+ * @return a bool
+ */
+
+bool equal_vec3(Vec3 a, Vec3 b)
+{
+    return fabs(dist_vec3(a, b)) < EPSILON;
+} 
 
 /**
  * @brief This checks if two segments are intersecting
@@ -806,6 +850,245 @@ PSLG* generate_pslg(int* result, Vec3* vertices, int vertex_count)
     *result = SUCCESS;
     return new;
 }
+/**
+ * @brief Deduplicates the pslg
+ * @param[out] result
+ * @param pslg the pslg
+ * @param v1 the first vertex
+ * @param v2 the second vertex
+ * @return nothing
+ */
+
+void dedup_pslg_a_vertex(int* result, PSLG* pslg, int v1, int v2)
+{
+    if (v1 == v2)
+    {
+        *result = NOOP;
+        return;
+    }
+    if (v1 > v2)
+    {
+        *result = NOOP;
+        return;
+    }
+    Vec3 vec1 = pslg->vertices[v1];
+    Vec3 vec2 = pslg->vertices[v2]; 
+    if (!equal_vec3(vec1, vec2))
+    {
+        *result = NOOP;
+        return;
+    }    
+    for (int i = v2; i < pslg->vertex_count - 1; i++)
+    {
+        pslg->vertices[i] = pslg->vertices[i + 1];
+    }
+    if (REALIGN(pslg->vertex_count, pslg->vertex_count - 1))
+    {
+        Vec3* temp = realloc(pslg->vertices, BIT_ALIGN(pslg->vertex_count - 1) * sizeof(Vec3));
+        if (!temp)
+        {
+            *result = DEDUP_PSLG_VERTEX_REALLOC_ERROR;
+            return;
+        }
+        pslg->vertices = temp;
+    }
+    pslg->vertex_count--;
+    for (int i = 0; i < pslg->edge_count; i++)
+    {
+        if (pslg->edges[i][0] == v2)
+        {
+            pslg->edges[i][0] = v1;
+        }
+        if (pslg->edges[i][1] == v2)
+        {
+            pslg->edges[i][1] = v2;
+        }
+        if (pslg->edges[i][0] > v2)
+        {
+            pslg->edges[i][0]--;
+        }
+        if (pslg->edges[i][1] > v2)
+        {
+            pslg->edges[i][1]--;
+        }
+    }
+    *result = SUCCESS;
+}
+
+/**
+ * @brief This deduplicates a single vertex
+ * @param[out] result This outputs the result
+ * @param pslg This deduplicates a single vertex
+ * @return nothing
+ */
+
+void dedup_pslg_one_vertex(int* result, PSLG* pslg)
+{
+    for (int i = 0; i < pslg->vertex_count; i++)
+    {
+        for (int j = 0; j < pslg->vertex_count; j++)
+        {
+            dedup_pslg_a_vertex(result, pslg, i, j);
+            if (*result != NOOP)
+            {
+                return;
+            }
+        }
+    }
+    *result = NOOP;
+}
+
+/**
+ * @brief This deduplicates all vertices
+ * @param[out] result This outputs result
+ * @param pslg The pslg
+ * @return nothing
+ */
+
+void dedup_pslg_vertex(int* result, PSLG* pslg)
+{
+    for(;;)
+    {
+        dedup_pslg_one_vertex(result, pslg);
+        if (*result == NOOP)
+        {
+            return;
+        }
+        if (IS_AN_ERROR(*result))
+        {
+            return;
+        }
+    }
+}
+
+/** 
+ * @brief Deduplicates a single edge
+ * @param[out] result This outputs result
+ * @param pslg The pslg
+ * @param e1 The first edge
+ * @param e2 The second edge
+ * @return Nothing
+ */
+
+void dedup_pslg_a_edge(int* result, PSLG* pslg, int e1, int e2)
+{
+    if (e1 > e2)
+    {
+        *result = NOOP;
+        return;
+    }
+    if (e1 == e2)
+    {
+        *result = NOOP;
+        return;
+    }
+    
+    if (equal_vec3(pslg->vertices[pslg->edges[e1][0]], pslg->vertices[pslg->edges[e2][0]]))
+    {
+        if (equal_vec3(pslg->vertices[pslg->edges[e1][1]], pslg->vertices[pslg->edges[e2][1]]))
+        {
+            *result = NOOP;
+            return;
+        }
+    }
+
+    if (equal_vec3(pslg->vertices[pslg->edges[e1][0]], pslg->vertices[pslg->edges[e2][1]]))
+    {
+        if (equal_vec3(pslg->vertices[pslg->edges[e1][1]], pslg->vertices[pslg->edges[e2][0]]))
+        {
+            *result = NOOP;
+            return;
+        }
+    }
+
+    
+    for (int i = e2; i < pslg->edge_count - 1; i++)
+    {
+        pslg->edges[i][0] = pslg->edges[i + 1][0];
+        pslg->edges[i][1] = pslg->edges[i + 1][1];
+    }
+
+    if (REALIGN(pslg->edge_count, pslg->edge_count-1))
+    {
+        int (*temp_ptr)[2] = realloc(pslg->edges, sizeof(int[2]) * BIT_ALIGN(pslg->edge_count - 1));
+        if (!temp_ptr)
+        {
+            *result = DEDUP_PSLG_EDGES_REALLOC_ERROR;
+            return;
+        }
+        pslg->edges = temp_ptr;
+    }
+    *result = SUCCESS;
+    pslg->edge_count--;
+}
+
+/**
+ * @brief Deduplicates the pslg, only one edge
+ * @param[out] result The result
+ * @param pslg The PSLG to be deduplicated
+ * @return nothing
+ */
+
+void dedup_pslg_one_edge(int* result, PSLG* pslg)
+{
+    for (int i = 0; i < pslg->edge_count; i++)
+    {
+        for (int j = 0; j < pslg->edge_count; j++)
+        {
+            dedup_pslg_a_edge(result, pslg, i, j);
+            if (*result != NOOP)
+            {
+                return;
+            }
+        }
+    }
+    *result = NOOP;
+}
+
+/**
+ * @brief Deduplicates the pslg edges
+ * @param[out] result The result
+ * @param pslg The PSLG to be deduplicated
+ * @return nothing
+ */
+
+void dedup_pslg_edge(int* result, PSLG* pslg)
+{
+    for(;;)
+    {
+        dedup_pslg_one_edge(result, pslg);
+        if (*result == NOOP)
+        {
+            return;
+        }
+        if (IS_AN_ERROR(*result))
+        {
+            return;
+        }
+    }
+}
+
+/**
+ * @brief Deduplicates the entire pslg
+ * @param[out] result The result
+ * @param pslg The pslg to be deduplicated
+ * @return nothing
+ */
+
+void dedup_pslg(int *result, PSLG* pslg)
+{
+    dedup_pslg_vertex(result, pslg);
+    if (IS_AN_ERROR(*result))
+    {
+        return;
+    }
+    dedup_pslg_edge(result, pslg);
+    if (IS_AN_ERROR(*result))
+    {
+        return;
+    }
+    *result = SUCCESS;
+}
 
 /**
  * @brief This takes two edges and splits a PSLG if neccesary
@@ -815,6 +1098,7 @@ PSLG* generate_pslg(int* result, Vec3* vertices, int vertex_count)
  * @param edge2 This is the second edge
  * @return This outputs nothing. 
  */
+
 
 void splitPSLG(int* result, PSLG* pslg, int edge1, int edge2)
 {
@@ -915,7 +1199,10 @@ void split_entirely(int* result, PSLG* pslg)
 {
     for(;;)
     {
+        int ne = pslg->edge_count;
+        int nv = pslg->vertex_count;
         remove_single_edge(result, pslg);
+    
         if(*result == NOOP) 
         {
             *result = SUCCESS;
@@ -924,6 +1211,19 @@ void split_entirely(int* result, PSLG* pslg)
         if(IS_AN_ERROR(*result))
         {
             return;
+        }
+        dedup_pslg(result, pslg);
+        if(IS_AN_ERROR(*result))
+        {
+            return;
+        }
+        
+        if (pslg->edge_count == ne)
+        {
+            if (pslg->vertex_count == nv)
+            {
+                return;
+            }
         }
     }
 }
@@ -1653,7 +1953,6 @@ int main(int argc, char *argv[])
         print_error(result);
         return 1;
     }
-
     for (int i = 0; i < tri->triangle_count; i++)
     {
         printf("A: %f %f %f\n", tri->triangles[0]->x, tri->triangles[0]->y, tri->triangles[0]->z);
