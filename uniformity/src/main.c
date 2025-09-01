@@ -63,13 +63,9 @@
 /// @def BIT_IGNORE
 /// @brief Alignment granularity in bits (round up to 2^BIT_IGNORE).
 #define BIT_IGNORE 4
-/// @def SHRINK_BIT_IGNORE
-/// @brief When shrinking data this is the new alignment  
-#define SHRINK_BIT_IGNORE 5
-
 /// @def BIT_ALIGN(x)
 /// @brief Round x up to nearest aligned multiple.
-#define BIT_ALIGN(x) (((x) + ((1 << BIT_IGNORE) - 1)) & ~((1 << BIT_IGNORE) - 1))
+#define BIT_ALIGN(x) max((((x) + ((1 << BIT_IGNORE) - 1)) & ~((1 << BIT_IGNORE) - 1)),1)
 
 /// @def REALIGN(a,b)
 /// @brief True if a and b land in different aligned capacity buckets.
@@ -120,8 +116,8 @@
 #define OFF_FACE_ERROR 0x03000015 ///< Reading a face of an off file failed
 #define DEDUP_PSLG_VERTEX_REALLOC_ERROR 0x03000016 ///< When deduplicating pslg vertices memory reallocation failed.
 #define DEDUP_PSLG_EDGES_REALLOC_ERROR 0x03000017 ///< When deduplicating pslg edges memory reallocation failed.
-
-
+#define STL_HEADER_WRITE_ERROR 0x03000018
+#define STL_VECTOR_WRITE_ERROR 0x03000019
 
 /** 
  * @brief Print out the error 
@@ -208,6 +204,12 @@ void print_error(int error)
             break;
         case DEDUP_PSLG_EDGES_REALLOC_ERROR:
             fprintf(stderr, "When deduplicating the PSLG edges, realloc failed\n");
+            break;
+        case STL_HEADER_WRITE_ERROR:
+            fprintf(stderr, "When writing to the header of an stl, writing failed\n");
+            break;
+        case STL_VECTOR_WRITE_ERROR:
+            fprintf(stderr, "When writing a vector to an stl, writing failed\n");
             break;
         default:
             fprintf(stderr, "SOMETHING BAD HAPPENED\n");
@@ -696,6 +698,55 @@ bool equal_vec3(Vec3 a, Vec3 b)
 } 
 
 /**
+ * @brief This normalizes a vector
+ * @param a The vector to be normalized
+ * @return The normalization
+ */
+
+Vec3 normalize_vec3(Vec3 a)
+{
+    if (magnitude_vec3(a) < EPSILON)
+    {
+        Vec3 f = {0, 0, 0};
+        return f;
+    }
+    return multiply_vec3(a, 1 / magnitude_vec3(a));
+}
+/**
+ * @brief This takes the cross product fo two vectors
+ * @param a the first one
+ * @param b the second one
+ * @return the normalization
+ */
+
+Vec3 cross_vec3(Vec3 a, Vec3 b)
+{
+    Vec3 r = 
+    {
+        a.y * b.z - a.z * b.y,
+        a.z * b.x - a.x * b.z,
+        a.x * b.y - a.y * b.x
+    };
+    return r;
+}
+
+/**
+ * @brief Generates normal vector 
+ * @param a first vertex of the triangle
+ * @param b The second vertex
+ * @param c The third
+ * @return A normal vector
+ */
+
+Vec3 normal_vec3(Vec3 a, Vec3 b, Vec3 c)
+{
+    Vec3 AB = subtract_vec3(b, a);
+    Vec3 AC = subtract_vec3(c, a);
+    Vec3 n  = cross_vec3(AB, AC);   
+    return normalize_vec3(n);        
+}
+
+/**
  * @brief This checks if two segments are intersecting
  * @param a This parameter is the first vertex of the first edge
  * @param b This parameter is the second vertex of the first edge
@@ -1022,6 +1073,7 @@ void dedup_pslg_a_edge(int* result, PSLG* pslg, int e1, int e2)
             *result = DEDUP_PSLG_EDGES_REALLOC_ERROR;
             return;
         }
+
         pslg->edges = temp_ptr;
     }
     *result = SUCCESS;
@@ -1351,9 +1403,11 @@ void attack_vertex(int* result, PSLGTriangulation* pslgtri, int vertex_idx)
     int (*temp)[2] = malloc(ecount * sizeof(int[2])); // this isn't aligned because it is gonna DIE SOON.
     if (temp == null)
     {
+
         *result = PSLG_ATTACK_TEMP_EDGES_MALLOC_ERROR;
         return;
     }
+
     int EI = 0;
     for (int i = 0; i < pslg->edge_count; i++)
     {
@@ -1375,22 +1429,22 @@ void attack_vertex(int* result, PSLGTriangulation* pslgtri, int vertex_idx)
         temp[EI][0] = v1;
         temp[EI][1] = v2;
     }
-    #pragma push_macro("BIT_IGNORE")
-    #undef BIT_IGNORE
-    #define BIT_IGNORE SHRINK_BIT_IGNORE
     if (REALIGN(pslg->edge_count, ecount))
     {
         int (*temp_ptr)[2] = realloc(pslg->edges, BIT_ALIGN(ecount) * sizeof(int[2]));
+        
         if (temp_ptr == null)
         {
+            printf("FAIL: %i\n", BIT_ALIGN(ecount));
+
             *result = PSLG_ATTACK_EDGE_REALLOCATION_ERROR;
             free(temp);
-            #pragma pop_macro("BIT_IGNORE")
             return;
         }
+        printf("WIN: %i\n", BIT_ALIGN(ecount));
+
         pslg->edges = temp_ptr;
     }
-    #pragma pop_macro("BIT_IGNORE")
     pslg->edge_count = ecount;
     // time to populate the data
     for (int i = 0; i < ecount; i++)
@@ -1655,7 +1709,7 @@ Polyhedron* create_polyhedron(int* result, int nv, int nf)
     if (!poly->faces)
     {
         *result = POLYHEDRON_FACE_MALLOC_ERROR;
-        goto clean;
+        goto clean; 
     }
     poly->face_sizes = malloc(nf * sizeof(int));
     if (!poly->face_sizes)
@@ -1669,6 +1723,7 @@ Polyhedron* create_polyhedron(int* result, int nv, int nf)
         free_polyhedron(poly);
         return (Polyhedron*)null;
 }
+
 
 /**
  * @brief This takes a global buffer and renders it
@@ -1927,6 +1982,151 @@ Polyhedron* read_off_into_polyhedron(int* result, FILE* fin)
     }
     return poly;
 }
+/**
+ * @brief Convert a uint32 to little-endian format
+ * @param v The number to convert
+ * @param b The new version
+ * @return nothing
+ */
+
+void le32_bytes(uint32_t v, unsigned char b[4]) 
+{
+    b[0] = (unsigned char)((v >> 0) & 0xFFu);
+    b[1] = (unsigned char)((v >> 8) & 0xFFu);
+    b[2] = (unsigned char)((v >> 16) & 0xFFu);
+    b[3] = (unsigned char)((v >> 24) & 0xFFu);
+}
+
+/**
+ * @brief Convert a float to little-endian format
+ * @param v The number to convert
+ * @param b The new version
+ * @return nothing
+ */
+
+void lef32_bytes(float v, unsigned char b[4]) 
+{
+    union
+    {
+        float f;
+        uint32_t u;
+    } 
+    u;
+    u.f = v;
+    le32_bytes(u.u, b);
+}
+
+/**
+ * @brief Writes a triangulation into an stl
+ * @param[out] result
+ * @param tri The triangulation
+ * @param file The file
+ * @return nothing
+ */
+
+void write_to_stl(int* result, Triangulation* tri, FILE* fin)
+{   
+    unsigned char header[80];
+    memset(header, 0, sizeof(header));
+    if(fwrite(header, 1, 80, fin) != 80)
+    {
+        *result = STL_HEADER_WRITE_ERROR;
+        return;
+    }
+    unsigned char h[4];
+    le32_bytes((uint32_t)tri->triangle_count, h);
+    if(fwrite(h, 1, 4, fin) != 4)
+    {
+        *result = STL_HEADER_WRITE_ERROR;
+        return;
+    }
+    for (int i = 0; i < tri->triangle_count; i++)
+    {
+        Vec3 a = tri->triangles[i][0];
+        Vec3 b = tri->triangles[i][1];
+        Vec3 c = tri->triangles[i][2];
+        Vec3 n = normal_vec3(a, b, c);
+        lef32_bytes(n.x, h);
+        if(fwrite(h, 1, 4, fin) != 4)
+        {
+            *result = STL_VECTOR_WRITE_ERROR;
+            return;
+        }
+        lef32_bytes(n.y, h);
+        if(fwrite(h, 1, 4, fin) != 4)
+        {
+            *result = STL_VECTOR_WRITE_ERROR;
+            return;
+        }
+        lef32_bytes(n.z, h);
+        if(fwrite(h, 1, 4, fin) != 4)
+        {
+            *result = STL_VECTOR_WRITE_ERROR;
+            return;
+        }
+        lef32_bytes(a.x, h);
+        if(fwrite(h, 1, 4, fin) != 4)
+        {
+            *result = STL_VECTOR_WRITE_ERROR;
+            return;
+        }
+        lef32_bytes(a.y, h);
+        if(fwrite(h, 1, 4, fin) != 4)
+        {
+            *result = STL_VECTOR_WRITE_ERROR;
+            return;
+        }
+        lef32_bytes(a.z, h);
+        if(fwrite(h, 1, 4, fin) != 4)
+        {
+            *result = STL_VECTOR_WRITE_ERROR;
+            return;
+        }
+        lef32_bytes(b.x, h);
+        if(fwrite(h, 1, 4, fin) != 4)
+        {
+            *result = STL_VECTOR_WRITE_ERROR;
+            return;
+        }
+        lef32_bytes(b.y, h);
+        if(fwrite(h, 1, 4, fin) != 4)
+        {
+            *result = STL_VECTOR_WRITE_ERROR;
+            return;
+        }
+        lef32_bytes(b.z, h);
+        if(fwrite(h, 1, 4, fin) != 4)
+        {
+            *result = STL_VECTOR_WRITE_ERROR;
+            return;
+        }
+        lef32_bytes(c.x, h);
+        if(fwrite(h, 1, 4, fin) != 4)
+        {
+            *result = STL_VECTOR_WRITE_ERROR;
+            return;
+        }
+        lef32_bytes(c.y, h);
+        if(fwrite(h, 1, 4, fin) != 4)
+        {
+            *result = STL_VECTOR_WRITE_ERROR;
+            return;
+        }
+        lef32_bytes(c.z, h);
+        if(fwrite(h, 1, 4, fin) != 4)
+        {
+            *result = STL_VECTOR_WRITE_ERROR;
+            return;
+        }
+        unsigned char attr[2] = {0, 0};
+        if(fwrite(attr, 1, 2, fin) != 2)
+        {
+            *result = STL_VECTOR_WRITE_ERROR;
+            return;
+        }
+    }
+    *result = SUCCESS;
+}
 
 /**
  * @brief the main function lol
@@ -1938,7 +2138,7 @@ Polyhedron* read_off_into_polyhedron(int* result, FILE* fin)
 int main(int argc, char *argv[]) 
 {
     int result = SUCCESS;
-    FILE* fin = fopen("../media/models/sissid.off", "r");
+    FILE* fin = fopen("../media/models/gad.off", "r");
     Polyhedron* poly = read_off_into_polyhedron(&result, fin);
     fclose(fin);
 
@@ -1960,12 +2160,15 @@ int main(int argc, char *argv[])
         print_error(result);
         return 1;
     }
-    for (int i = 0; i < tri->triangle_count; i++)
+    FILE* fin2 = fopen("e.stl", "wb");
+    write_to_stl(&result, tri, fin2);
+    if (IS_AN_ERROR(result))
     {
-        printf("A: %f %f %f\n", tri->triangles[i][0].x, tri->triangles[i][0].y, tri->triangles[i][0].z);
-        printf("B: %f %f %f\n", tri->triangles[i][1].x, tri->triangles[i][1].y, tri->triangles[i][1].z);
-        printf("C: %f %f %f\n", tri->triangles[i][2].x, tri->triangles[i][2].y, tri->triangles[i][2].z);
+        print_error(result);
+        return 1;
     }
+    fclose(fin2);
+
     SDL_Init(SDL_INIT_VIDEO);
     (void)argc;
     (void)argv;
