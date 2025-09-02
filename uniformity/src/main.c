@@ -445,14 +445,6 @@ struct VideoData
      * @brief Backreference to Global Buffer
      */
     GlobalBuffer* gb;
-    /**
-     * @brief Who wrote this?! Why does this exist
-     */
-    void (*init)(struct VideoData*); 
-    /**
-     * @brief Again why does this exist!?!
-     */
-    void (*free)(struct VideoData*); 
 };
 
 /**
@@ -2138,7 +2130,7 @@ void write_to_stl(int* result, Triangulation* tri, FILE* fin)
 int main(int argc, char *argv[]) 
 {
     int result = SUCCESS;
-    FILE* fin = fopen("../media/models/gad.off", "r");
+    FILE* fin = fopen("../media/models/sissid.off", "r");
     Polyhedron* poly = read_off_into_polyhedron(&result, fin);
     fclose(fin);
 
