@@ -726,6 +726,7 @@ Vec3 normalize_vec3(Vec3 a)
     }
     return multiply_vec3(a, 1 / magnitude_vec3(a));
 }
+
 /**
  * @brief This takes the cross product fo two vectors
  * @param a the first one
@@ -926,6 +927,7 @@ PSLG* generate_pslg(int* result, Vec3* vertices, int vertex_count)
     *result = SUCCESS;
     return new;
 }
+
 /**
  * @brief Deduplicates the pslg
  * @param[out] result
@@ -2206,7 +2208,7 @@ int main(int argc, char *argv[])
     SDL_GL_SetAttribute(SDL_GL_MULTISAMPLEBUFFERS, 1);
     SDL_GL_SetAttribute(SDL_GL_MULTISAMPLESAMPLES, 4);
 
-    SDL_Window *win = SDL_CreateWindow("Rotating Cube",
+    SDL_Window* win = SDL_CreateWindow("Canim",
         SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
         800, 600,
         SDL_WINDOW_OPENGL | SDL_WINDOW_SHOWN);

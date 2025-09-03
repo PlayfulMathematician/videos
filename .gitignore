@@ -10,6 +10,8 @@
 *.off
 *.dll
 *.stl
+*.o
+*.d
 __pycache__
 # Visual Studio Code and Jetbrains IDE stuff
 .idea
