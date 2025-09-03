@@ -36,6 +36,7 @@
     You should have received a copy of the GNU Affero General Public License
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
+
 #include <stdio.h>
 #include <stdbool.h>
 #include <stdlib.h>
@@ -46,8 +47,12 @@
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_mixer.h>
 #include <GL/gl.h>
+/// @def max
+/// @brief The maximizer
+#ifndef max
+    #define max(a, b) (((a > b)) ? (a) : (b))
+#endif
 
-// what is posix
 /// @def EPSILON
 /// @brief Tolerance for floating-point comparisons.
 #define EPSILON 0.000001
@@ -56,6 +61,7 @@
 /// @brief I do not want to capitalize NULL
 #define null ((void*)0)
 #undef NULL
+
 /// @def LINE_LENGTH
 /// @brief The Length of a line 
 #define LINE_LENGTH 1024
@@ -116,8 +122,8 @@
 #define OFF_FACE_ERROR 0x03000015 ///< Reading a face of an off file failed
 #define DEDUP_PSLG_VERTEX_REALLOC_ERROR 0x03000016 ///< When deduplicating pslg vertices memory reallocation failed.
 #define DEDUP_PSLG_EDGES_REALLOC_ERROR 0x03000017 ///< When deduplicating pslg edges memory reallocation failed.
-#define STL_HEADER_WRITE_ERROR 0x03000018
-#define STL_VECTOR_WRITE_ERROR 0x03000019
+#define STL_HEADER_WRITE_ERROR 0x03000018 ///< @todo Document this error
+#define STL_VECTOR_WRITE_ERROR 0x03000019 ///< @todo Document this error
 
 /** 
  * @brief Print out the error 
@@ -449,17 +455,33 @@ struct VideoData
 
 /**
  * @brief The sound data
- * @remark I will not document this.
- * @todo Document this.
  */
 
 typedef struct
 {
+    /**
+     * @brief A list of lists of sounds.
+     */
    char*** sounds;
+   /**
+     * @brief A list of the channel sound count.
+     */
    int* sound_count;
+   /**
+    * @brief The list of lists of start times
+    */
    float** start_t;
+   /**
+    * @brief The list of lists of end times.
+    */
    float** end_t;
+   /**
+    * The number of channels
+    */
    int channel_count;
+   /**
+    * Backreference to global buffer
+    */
    GlobalBuffer* gb;
 }
 SoundData;
@@ -1793,7 +1815,7 @@ void render_gb(GlobalBuffer* gb, int t)
 
 void read_clean_line(int* result, FILE* fin, char* buf)
 {
-    while (fgets(buf, LINE_LENGTH, fin)) 
+    for (;fgets(buf, LINE_LENGTH, fin);) 
     {
         buf[strcspn(buf, "\r\n")] = 0;             
         char* h = strchr(buf, '#'); 
@@ -1803,7 +1825,7 @@ void read_clean_line(int* result, FILE* fin, char* buf)
         }
         char* p = buf + strspn(buf, " \t"); 
         size_t n = strlen(p);
-        while (n && (p[n-1]==' ' || p[n-1]=='\t'))
+        for (;n && (p[n-1]==' ' || p[n-1]=='\t');)
         {
             p[--n] = 0;
         }

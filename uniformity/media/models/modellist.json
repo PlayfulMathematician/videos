@@ -2,15 +2,18 @@
     [
         "https://polytope.miraheze.org/wiki/File:Small_stellated_dodecahedron.off",
         "sissid"
-    ],
+    ]
+    ,
     [
         "https://polytope.miraheze.org/wiki/File:Great_dodecahedron.off",
         "gad"
-    ],
+    ]
+    ,
     [
         "https://polytope.miraheze.org/wiki/File:Cube.off",
         "cube"
-    ],
+    ]
+    ,
     [
         "https://polytope.miraheze.org/wiki/File:Great_stellated_dodecahedron.off",
         "gissid"
