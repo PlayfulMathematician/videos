@@ -750,44 +750,55 @@ Vec3 normal_vec3(Vec3 a, Vec3 b, Vec3 c)
 
 int intersecting_segments(Vec3 a, Vec3 b, Vec3 c, Vec3 d, Vec3* out)
 {    
-    if (a.x == b.x && a.y == b.y && c.x == d.x && c.y == d.y)
+    if (
+        fabs(a.x-b.x) < EPSILON && 
+        fabs(a.y-b.y) < EPSILON && 
+        fabs(c.x-d.x) < EPSILON && 
+        fabs(c.y-d.y) < EPSILON 
+    )
     {
         return 0;
     }
     float tx; 
     float ty;
     int vertical = 0;
-    float denom1;
-    float denom2;
-    if (a.x == b.x && a.y == b.y)
+    float denomx;
+    float denomy;
+    if (
+        fabs(a.x-b.x) < EPSILON && 
+        fabs(a.y-b.y) < EPSILON 
+    )
     {
         tx = (a.x - c.x);
         ty = (a.y - c.y);
-        denom1 = (d.y - c.y);
-        denom2 = d.x - d.y;
+        denomx = d.x - c.x;
+        denomy = d.y - c.y;
         vertical = 1;
     }
-    if (c.x == d.x && c.y == d.y)
+    if (
+        fabs(c.x - d.x) < EPSILON &&
+        fabs(c.y - d.y) < EPSILON
+    )   
     {
         tx = (c.x - a.x);
         ty = (c.y - a.y);
-        denom1 = b.y - a.y;
-        denom2 = b.x - a.x;
+        denomx = b.x - a.x;
+        denomy = b.x - a.y;
         vertical = 2;
     }
     if (vertical > 0)
     {
-        if (fabs(denom1) < EPSILON)
+        if (fabs(denomx) < EPSILON)
         {
             return 0;
         }
-        if (fabs(denom2) < EPSILON)
+        if (fabs(denomy) < EPSILON)
         {
             return 0;
         }
         
-        tx /= denom2;
-        ty /= denom1;
+        tx /= denomx;
+        ty /= denomy;
         if (tx < 0 || tx > 1)
         {
             return 0;
