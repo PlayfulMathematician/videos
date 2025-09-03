@@ -2140,10 +2140,17 @@ void write_to_stl(int* result, Triangulation* tri, FILE* fin)
 
 int main(int argc, char *argv[]) 
 {
+    if (argc != 2)
+    {
+        fprintf(stderr, "I wish for two parameters!");
+        return 1;
+    }
+
     int result = SUCCESS;
-    FILE* fin = fopen("../media/models/gissid.off", "r");
+    FILE* fin = fopen(argv[1], "r");
     Polyhedron* poly = read_off_into_polyhedron(&result, fin);
     fclose(fin);
+    
 
     if (IS_AN_ERROR(result))
     {
@@ -2173,8 +2180,6 @@ int main(int argc, char *argv[])
     fclose(fin2);
 
     SDL_Init(SDL_INIT_VIDEO);
-    (void)argc;
-    (void)argv;
 
     SDL_GL_SetAttribute(SDL_GL_MULTISAMPLEBUFFERS, 1);
     SDL_GL_SetAttribute(SDL_GL_MULTISAMPLESAMPLES, 4);
