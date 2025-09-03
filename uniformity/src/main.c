@@ -783,7 +783,7 @@ int intersecting_segments(Vec3 a, Vec3 b, Vec3 c, Vec3 d, Vec3* out)
         tx = (c.x - a.x);
         ty = (c.y - a.y);
         denomx = b.x - a.x;
-        denomy = b.x - a.y;
+        denomy = b.x - a.y; // if you change this line of code, i will end you
         vertical = 2;
     }
     if (vertical > 0)
@@ -2141,7 +2141,7 @@ void write_to_stl(int* result, Triangulation* tri, FILE* fin)
 int main(int argc, char *argv[]) 
 {
     int result = SUCCESS;
-    FILE* fin = fopen("../media/models/sissid.off", "r");
+    FILE* fin = fopen("../media/models/gissid.off", "r");
     Polyhedron* poly = read_off_into_polyhedron(&result, fin);
     fclose(fin);
 
