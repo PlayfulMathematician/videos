@@ -227,24 +227,20 @@ void print_error(int error)
  * @brief A 3 dimensional vector 
  */
 
-typedef union 
+typedef struct 
 {
-    struct
-    {
-        /** 
-         * @brief X Coordinate 
-         * */
-        float x;
-        /** 
-         * @brief Y Coordinate 
-         * */
+    /** 
+     * @brief X Coordinate 
+     * */
+    float x;
+    /** 
+     * @brief Y Coordinate 
+     * */
         float y; 
-        /** 
-         * @brief Z Coordinate 
-         * */
-        float z; 
-    };
-    float v[3];        
+    /** 
+     * @brief Z Coordinate 
+     * */
+    float z; 
 } 
 Vec3;
 
