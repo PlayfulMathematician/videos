@@ -46,7 +46,11 @@
 #include <stdint.h>
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_mixer.h>
-#include <GL/gl.h>
+#ifdef __APPLE__
+    #include <OpenGL/gl.h>
+#else
+    #include <GL/gl.h>
+#endif
 /// @def max
 /// @brief The maximizer
 #ifndef max
@@ -122,8 +126,15 @@
 #define OFF_FACE_ERROR 0x03000015 ///< Reading a face of an off file failed
 #define DEDUP_PSLG_VERTEX_REALLOC_ERROR 0x03000016 ///< When deduplicating pslg vertices memory reallocation failed.
 #define DEDUP_PSLG_EDGES_REALLOC_ERROR 0x03000017 ///< When deduplicating pslg edges memory reallocation failed.
-#define STL_HEADER_WRITE_ERROR 0x03000018 ///< @todo Document this error
-#define STL_VECTOR_WRITE_ERROR 0x03000019 ///< @todo Document this error
+#define STL_HEADER_WRITE_ERROR 0x03000018 ///< When writing to header of stl, writing failed
+#define STL_VECTOR_WRITE_ERROR 0x03000019 ///< When writing to vector of stl, writing failed
+#define RGB_BUFFER_MALLOC_ERROR 0x0300001a ///< When allocating a rgb buffer, malloc failed
+#ifdef _WIN32
+  #define POPEN  _popen
+  #define PCLOSE _pclose
+#else
+  #define POPEN  popen
+  #define PCLOSE pclose
 
 /** 
  * @brief Print out the error 
@@ -216,6 +227,9 @@ void print_error(int error)
             break;
         case STL_VECTOR_WRITE_ERROR:
             fprintf(stderr, "When writing a vector to an stl, writing failed\n");
+            break;
+        case RGB_BUFFER_MALLOC_ERROR:
+            fprintf(stderr, "When allocating an rgb buffer, malloc failed\n");
             break;
         default:
             fprintf(stderr, "SOMETHING BAD HAPPENED\n");
@@ -501,6 +515,147 @@ struct GlobalBuffer
      */
     VideoData* videodata;
 };
+
+/**
+ * @brief A lighting object for OpenGL
+ */
+typedef struct
+{
+    /**
+     * @brief The OpenGL light ID (GL_LIGHT0, GL_LIGHT1, etc.)
+     */
+    int id;
+
+    /**
+     * @brief The position of the light in world space.
+     */
+    Vec3 position;
+
+    /**
+     * @brief The ambient color contribution.
+     */
+    Vec3 ambient;
+
+    /**
+     * @brief The diffuse color contribution.
+     */
+    Vec3 diffuse;
+
+    /**
+     * @brief The specular color contribution.
+     */
+    Vec3 specular;
+
+    /**
+     * @brief Whether the light is enabled.
+     */
+    bool enabled;
+}
+Lighting;
+
+/**
+ * @brief Construct a light with default parameters.
+ * @param id The Id
+ * @param pos The position
+ * @return Your light
+ */
+
+Lighting create_light(int id, Vec3 pos)
+{
+    Lighting l;
+    l.id       = id;
+    l.position = pos;
+    l.ambient  = (Vec3){0.15f, 0.15f, 0.20f};
+    l.diffuse  = (Vec3){0.90f, 0.90f, 0.90f};
+    l.specular = (Vec3){0.80f, 0.80f, 0.80f};
+    l.enabled  = true;
+    return l;
+}
+
+/**
+ * @brief apply it
+ * @param l lighting
+ * @return Nothing.
+ */
+
+void apply_light(Lighting* l)
+{
+    if (!l->enabled)
+    {
+        glDisable(l->id);
+        return;
+    }
+    glEnable(GL_LIGHTING);
+    glEnable(l->id);
+
+    GLfloat ambient[4] = {l->ambient.x,  l->ambient.y,  l->ambient.z,  1.0f};
+    GLfloat diffuse[4] = {l->diffuse.x,  l->diffuse.y,  l->diffuse.z,  1.0f};
+    GLfloat specular[4] = {l->specular.x, l->specular.y, l->specular.z, 1.0f};
+    GLfloat pos[4] = {l->position.x, l->position.y, l->position.z, 1.0f};
+    glLightfv(l->id, GL_AMBIENT,  ambient);
+    glLightfv(l->id, GL_DIFFUSE,  diffuse);
+    glLightfv(l->id, GL_SPECULAR, specular);
+    glLightfv(l->id, GL_POSITION, pos);
+    glEnable(GL_NORMALIZE);
+    glEnable(GL_COLOR_MATERIAL);
+    glColorMaterial(GL_FRONT, GL_AMBIENT_AND_DIFFUSE);
+}
+
+/**
+ * @brief This gets the frame buffer
+ * @param[out] result The result value
+ * @param w The width
+ * @param h The height
+ * @return the framebuffer
+ */
+
+unsigned char* get_framebuffer_rgb(int* result, int w, int h) 
+{
+    unsigned char* rgb = malloc(w * h * 3);
+    if (!rgb) 
+    {
+        *result = RGB_BUFFER_MALLOC_ERROR;
+        return NULL;
+    }
+    glPixelStorei(GL_PACK_ALIGNMENT, 1);
+    glReadPixels(0, 0, w, h, GL_RGB, GL_UNSIGNED_BYTE, rgb);
+    *result = SUCCESS;
+    return rgb;
+}
+
+/**
+ * @brief This opens ffmpeg pipe
+ * @param w Width
+ * @param h Height
+ * @param fps frames per second
+ * @param out_mp4 The output mp4
+ * @return The file
+ */
+
+FILE* open_ffmpeg_pipe(int w, int h, int fps, const char* out_mp4) 
+{
+    char cmd[1024];
+    snprintf(cmd, sizeof(cmd),
+        "ffmpeg -y -f rawvideo -pixel_format rgb24 -video_size %dx%d -framerate %d -i - "
+        "-vf vflip -c:v libx264 -preset veryfast -crf 18 -pix_fmt yuv420p \"%s\"",
+        w, h, fps, out_mp4);
+    return POPEN(cmd, "wb");
+}
+
+/**
+ * @brief This closes ffmpeg pipe
+ * @param pipef The pipe to close
+ * @return nothing
+ */
+
+void close_ffmpeg_pipe(FILE* pipef) 
+{
+    if (pipef) 
+    {
+        PCLOSE(pipef);
+    }
+}
+
 
 /**
  * @brief It outputs an empty triangulations
@@ -2217,6 +2372,7 @@ int main(int argc, char *argv[])
     glEnable(0x809D);
     glEnable(GL_DEPTH_TEST);
     SDL_Event e;
+    int angle = 0;
     int running = 1;
     for (;running;) 
     {
@@ -2236,7 +2392,7 @@ int main(int argc, char *argv[])
         glMatrixMode(GL_MODELVIEW);
         glLoadIdentity();
         glTranslatef(0,0,-3);
-        glRotatef(1, 1, 1, 0);
+        glRotatef(++angle, 1, 1, 0);
         SDL_GL_SwapWindow(win);
     }
 
