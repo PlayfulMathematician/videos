@@ -135,6 +135,7 @@
 #else
   #define POPEN  popen
   #define PCLOSE pclose
+#endif
 
 /** 
  * @brief Print out the error 
@@ -615,7 +616,7 @@ unsigned char* get_framebuffer_rgb(int* result, int w, int h)
     if (!rgb) 
     {
         *result = RGB_BUFFER_MALLOC_ERROR;
-        return NULL;
+        return null;
     }
     glPixelStorei(GL_PACK_ALIGNMENT, 1);
     glReadPixels(0, 0, w, h, GL_RGB, GL_UNSIGNED_BYTE, rgb);
@@ -2311,6 +2312,32 @@ void write_to_stl(int* result, Triangulation* tri, FILE* fin)
 }
 
 /**
+ * @brief Draw every triangle for die
+ * @param tri triangulation
+ * @return Nothing
+ */
+
+void draw_triangle(Triangulation tri)
+{
+    for(int i = 0; i < tri.triangle_count; i++)
+    {
+        Vec3 a = tri.triangles[i][0];
+        Vec3 b = tri.triangles[i][1];
+        Vec3 c = tri.triangles[i][2];
+
+
+        Vec3 n = normal_vec3(a, b, c);
+        glBegin(GL_TRIANGLES);
+            glNormal3f(n.x, n.y, n.z);
+            glVertex3f(a.x, a.y, a.z);
+            glVertex3f(b.x, b.y, b.z);
+            glVertex3f(c.x, c.y, c.z);
+        glEnd();
+    }
+}
+
+
+/**
  * @brief the main function lol
  * @param argc lol
  * @param argv lol
@@ -2372,8 +2399,15 @@ int main(int argc, char *argv[])
     glEnable(0x809D);
     glEnable(GL_DEPTH_TEST);
     SDL_Event e;
-    int angle = 0;
+    float angle = 0;
     int running = 1;
+    Lighting light0 = create_light(GL_LIGHT0, (Vec3){0.0f, 0.0f, 1.0f});
+    FILE* pipef = open_ffmpeg_pipe(800, 600, 60, "out.mp4");  
+    if (!pipef) 
+    {
+        fprintf(stderr, "Failed to open ffmpeg pipe\n");
+        return 1;
+    }
     for (;running;) 
     {
         for (;SDL_PollEvent(&e);)
@@ -2392,10 +2426,24 @@ int main(int argc, char *argv[])
         glMatrixMode(GL_MODELVIEW);
         glLoadIdentity();
         glTranslatef(0,0,-3);
-        glRotatef(++angle, 1, 1, 0);
-        SDL_GL_SwapWindow(win);
-    }
+        angle+=0.15;
+        glRotatef(angle, 1, 1, 0);   
+        apply_light(&light0);
+     
 
+        draw_triangle(*tri);        
+
+        SDL_GL_SwapWindow(win);
+        int w = 800, h = 600;
+        int frame_result;
+        unsigned char* rgb = get_framebuffer_rgb(&frame_result, w, h);
+        if (frame_result == SUCCESS && rgb) 
+        {
+            fwrite(rgb, 1, w*h*3, pipef);  
+        }
+        free(rgb);
+    }
+    close_ffmpeg_pipe(pipef);
     SDL_GL_DeleteContext(ctx);
     SDL_DestroyWindow(win);
     SDL_Quit();
