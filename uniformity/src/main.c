@@ -55,7 +55,7 @@
 /// @def max
 /// @brief The maximizer
 #ifndef max
-    #define max(a, b) ((((a) > (b))) ? (a) : (b))
+    #define max(a, b) (((a) > (b)) ? (a) : (b))
 #endif
 
 /// @def EPSILON
@@ -74,9 +74,12 @@
 /// @def BIT_IGNORE
 /// @brief Alignment granularity in bits (round up to 2^BIT_IGNORE).
 #define BIT_IGNORE 4
+/// @def BIT_SIZE
+/// @brief 2 ^ BIT_IGNORE - 1
+#define BIT_SIZE ((1 << BIT_IGNORE) - 1)
 /// @def BIT_ALIGN(x)
 /// @brief Round x up to nearest aligned multiple.
-#define BIT_ALIGN(x) max((((x) + ((1 << BIT_IGNORE) - 1)) & ~((1 << BIT_IGNORE) - 1)),1)
+#define BIT_ALIGN(x) max(((x) + BIT_SIZE) & ~BIT_SIZE,1)
 
 /// @def REALIGN(a,b)
 /// @brief True if a and b land in different aligned capacity buckets.
@@ -131,6 +134,7 @@
 #define STL_VECTOR_WRITE_ERROR 0x03000019 ///< When writing to vector of stl, writing failed
 #define RGB_BUFFER_MALLOC_ERROR 0x0300001a ///< When allocating a rgb buffer, malloc failed
 #define LOAD_OPENGL_FUNCTION_ERROR 0x0300001b ///< If an OPENGL function fails we are screwed
+#define OPENGL_SHADER_COMPILATION_ERROR 0x0300001c ///< When compiling a shader an error occured
 #ifdef _WIN32
   #define POPEN  _popen
   #define PCLOSE _pclose
@@ -236,6 +240,9 @@ void print_error(int error)
             break;
         case LOAD_OPENGL_FUNCTION_ERROR:
             fprintf(stderr, "Loading OpenGL function failed");
+            break;
+        case OPENGL_SHADER_COMPILATION_ERROR:
+            fprintf(stderr, "When compiling a shader an error occured");
             break;
         default:
             fprintf(stderr, "SOMETHING BAD HAPPENED\n");
@@ -643,6 +650,23 @@ void load_gl_shader_functions(int* result)
 
     *result = SUCCESS;
 }
+
+GLuint compile_shader(int* result, const char* src, GLenum type) 
+{
+    GLuint shader = pglCreateShader(type);
+    pglShaderSource(shader, 1, &src, NULL);
+    pglCompileShader(shader);
+    GLint _;
+    pglGetShaderiv(shader, GL_COMPILE_STATUS, &_);
+    if (!_) 
+    {
+        *result = OPENGL_SHADER_COMPILATION_ERROR;
+        return 0;
+    }
+    *result = SUCCESS;
+    return shader;
+}
+
 
 /**
  * @brief Construct a light with default parameters.
