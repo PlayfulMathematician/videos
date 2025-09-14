@@ -46,6 +46,7 @@
 #include <stdint.h>
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_mixer.h>
+#include <SDL2/SDL_opengl.h>
 #ifdef __APPLE__
     #include <OpenGL/gl.h>
 #else
@@ -129,6 +130,7 @@
 #define STL_HEADER_WRITE_ERROR 0x03000018 ///< When writing to header of stl, writing failed
 #define STL_VECTOR_WRITE_ERROR 0x03000019 ///< When writing to vector of stl, writing failed
 #define RGB_BUFFER_MALLOC_ERROR 0x0300001a ///< When allocating a rgb buffer, malloc failed
+#define LOAD_OPENGL_FUNCTION_ERROR 0x0300001b ///< If an OPENGL function fails we are screwed
 #ifdef _WIN32
   #define POPEN  _popen
   #define PCLOSE _pclose
@@ -136,6 +138,23 @@
   #define POPEN  popen
   #define PCLOSE pclose
 #endif
+static PFNGLCREATESHADERPROC        pglCreateShader;
+static PFNGLSHADERSOURCEPROC        pglShaderSource;
+static PFNGLCOMPILESHADERPROC       pglCompileShader;
+static PFNGLGETSHADERIVPROC         pglGetShaderiv;
+static PFNGLGETSHADERINFOLOGPROC    pglGetShaderInfoLog;
+static PFNGLCREATEPROGRAMPROC       pglCreateProgram;
+static PFNGLATTACHSHADERPROC        pglAttachShader;
+static PFNGLLINKPROGRAMPROC         pglLinkProgram;
+static PFNGLGETPROGRAMIVPROC        pglGetProgramiv;
+static PFNGLGETPROGRAMINFOLOGPROC   pglGetProgramInfoLog;
+static PFNGLUSEPROGRAMPROC          pglUseProgram;
+static PFNGLGETUNIFORMLOCATIONPROC  pglGetUniformLocation;
+static PFNGLUNIFORM1FPROC           pglUniform1f;
+static PFNGLUNIFORM3FPROC           pglUniform3f;
+static PFNGLDETACHSHADERPROC        pglDetachShader;
+static PFNGLDELETESHADERPROC        pglDeleteShader;
+static PFNGLDELETEPROGRAMPROC       pglDeleteProgram;
 
 /** 
  * @brief Print out the error 
@@ -231,6 +250,9 @@ void print_error(int error)
             break;
         case RGB_BUFFER_MALLOC_ERROR:
             fprintf(stderr, "When allocating an rgb buffer, malloc failed\n");
+            break;
+        case LOAD_OPENGL_FUNCTION_ERROR:
+            fprintf(stderr, "Loading OpenGL function failed");
             break;
         default:
             fprintf(stderr, "SOMETHING BAD HAPPENED\n");
@@ -553,6 +575,31 @@ typedef struct
     bool enabled;
 }
 Lighting;
+
+#define LOAD_GL(type, var, name) do {var = (type)SDL_GL_GetProcAddress(name);  if (!(var)) { fprintf(stderr, "Missing GL function: %s\n", name); *result = LOAD_OPENGL_FUNCTION_ERROR; return; } } while(0)
+
+void load_gl_shader_functions(int* result) 
+{
+    LOAD_GL(PFNGLCREATESHADERPROC,        pglCreateShader,        "glCreateShader");
+    LOAD_GL(PFNGLSHADERSOURCEPROC,        pglShaderSource,        "glShaderSource");
+    LOAD_GL(PFNGLCOMPILESHADERPROC,       pglCompileShader,       "glCompileShader");
+    LOAD_GL(PFNGLGETSHADERIVPROC,         pglGetShaderiv,         "glGetShaderiv");
+    LOAD_GL(PFNGLGETSHADERINFOLOGPROC,    pglGetShaderInfoLog,    "glGetShaderInfoLog");
+    LOAD_GL(PFNGLCREATEPROGRAMPROC,       pglCreateProgram,       "glCreateProgram");
+    LOAD_GL(PFNGLATTACHSHADERPROC,        pglAttachShader,        "glAttachShader");
+    LOAD_GL(PFNGLLINKPROGRAMPROC,         pglLinkProgram,         "glLinkProgram");
+    LOAD_GL(PFNGLGETPROGRAMIVPROC,        pglGetProgramiv,        "glGetProgramiv");
+    LOAD_GL(PFNGLGETPROGRAMINFOLOGPROC,   pglGetProgramInfoLog,   "glGetProgramInfoLog");
+    LOAD_GL(PFNGLUSEPROGRAMPROC,          pglUseProgram,          "glUseProgram");
+    LOAD_GL(PFNGLGETUNIFORMLOCATIONPROC,  pglGetUniformLocation,  "glGetUniformLocation");
+    LOAD_GL(PFNGLUNIFORM1FPROC,           pglUniform1f,           "glUniform1f");
+    LOAD_GL(PFNGLUNIFORM3FPROC,           pglUniform3f,           "glUniform3f");
+    LOAD_GL(PFNGLDETACHSHADERPROC,        pglDetachShader,        "glDetachShader");
+    LOAD_GL(PFNGLDELETESHADERPROC,        pglDeleteShader,        "glDeleteShader");
+    LOAD_GL(PFNGLDELETEPROGRAMPROC,       pglDeleteProgram,       "glDeleteProgram");
+    *result = SUCCESS;
+    return;
+}
 
 /**
  * @brief Construct a light with default parameters.
@@ -2189,14 +2236,7 @@ void le32_bytes(uint32_t v, unsigned char b[4])
 
 void lef32_bytes(float v, unsigned char b[4]) 
 {
-    union
-    {
-        float f;
-        uint32_t u;
-    } 
-    u;
-    u.f = v;
-    le32_bytes(u.u, b);
+    le32_bytes(*(uint32_t*)&v, b);
 }
 
 /**
