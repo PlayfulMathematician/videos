@@ -40,7 +40,7 @@ else ifeq ($(PLATFORM),mac)
 else
   OGL_LIBS := -lGL
 endif
-CFLAGS ?= -std=c11 -Werror -Wextra -Wall -Wpedantic -MMD -MP
+CFLAGS ?= -std=c11 -Werror -Wextra -Wall -Wpedantic -fno-strict-aliasing -MMD -MP
 CFLAGS += $(INCLUDES) $(SDL2_CFLAGS) $(MIXER_CFLAGS) $(WIN_DEFS)
 LDFLAGS ?=
 LDLIBS = $(SDL2_LIBS) $(MIXER_LIBS) $(OGL_LIBS)

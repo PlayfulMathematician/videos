@@ -135,6 +135,8 @@
 #define RGB_BUFFER_MALLOC_ERROR 0x0300001a ///< When allocating a rgb buffer, malloc failed
 #define LOAD_OPENGL_FUNCTION_ERROR 0x0300001b ///< If an OPENGL function fails we are screwed
 #define OPENGL_SHADER_COMPILATION_ERROR 0x0300001c ///< When compiling a shader an error occured
+#define OPENGL_SHADER_PROGRAM_LINK_ERROR 0x0300001d ///< When linking a shader program an error occured
+
 #ifdef _WIN32
   #define POPEN  _popen
   #define PCLOSE _pclose
@@ -239,10 +241,13 @@ void print_error(int error)
             fprintf(stderr, "When allocating an rgb buffer, malloc failed\n");
             break;
         case LOAD_OPENGL_FUNCTION_ERROR:
-            fprintf(stderr, "Loading OpenGL function failed");
+            fprintf(stderr, "Loading OpenGL function failed\n");
             break;
         case OPENGL_SHADER_COMPILATION_ERROR:
-            fprintf(stderr, "When compiling a shader an error occured");
+            fprintf(stderr, "When compiling a shader an error occured\n");
+            break;
+        case OPENGL_SHADER_PROGRAM_LINK_ERROR:
+            fprintf(stderr, "When linking a shader program an error occured\n");
             break;
         default:
             fprintf(stderr, "SOMETHING BAD HAPPENED\n");
@@ -606,7 +611,7 @@ PFNGLVALIDATEPROGRAMPROC pglValidateProgram;
 
 /**
  * @brief load all shader functions
- * @param result Did it succeed
+ * @param[out] result Did it succeed
  * @return nothing lol
  */
 
@@ -651,6 +656,15 @@ void load_gl_shader_functions(int* result)
     *result = SUCCESS;
 }
 
+/**
+ * @brief This compiles a shader
+ * @param[out] result This is the result
+ * @param src the source code of your shader
+ * @param type The type of your shader
+ * @return Your compiled shader
+ * 
+ */
+
 GLuint compile_shader(int* result, const char* src, GLenum type) 
 {
     GLuint shader = pglCreateShader(type);
@@ -666,6 +680,36 @@ GLuint compile_shader(int* result, const char* src, GLenum type)
     }
     *result = SUCCESS;
     return shader;
+}
+
+/**
+ * @brief This creates a shader program
+ * @param vs_src The vertex shader source
+ * @param fs_src The fragment shader source
+ * @return The shader program
+ */
+
+GLuint create_shader_program(const char* vs_src, const char* fs_src) 
+{
+    GLuint vs = compile_shader(vs_src, GL_VERTEX_SHADER);
+    GLuint fs = compile_shader(fs_src, GL_FRAGMENT_SHADER);
+    GLuint prog = pglCreateProgram();
+    pglAttachShader(prog, vs);
+    pglAttachShader(prog, fs);
+    pglLinkProgram(prog);
+    GLint _;
+    pglGetProgramiv(prog, GL_LINK_STATUS, &ok);
+    if (!_) 
+    {
+        *result = OPENGL_SHADER_PROGRAM_LINK_ERROR;
+        return 0;
+    }
+    pglDetachShader(prog, vs);
+    pglDetachShader(prog, fs);
+    pglDeleteShader(vs);
+    pglDeleteShader(fs);
+    *result = SUCCESS;
+    return prog;
 }
 
 
