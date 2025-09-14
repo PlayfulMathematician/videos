@@ -594,7 +594,7 @@ PFNGLBINDVERTEXARRAYPROC pglBindVertexArray;
 PFNGLDELETEVERTEXARRAYSPROC pglDeleteVertexArrays;
 PFNGLVALIDATEPROGRAMPROC pglValidateProgram;
 
-#define LOAD_GL(type, var, name) do {var = (type)SDL_GL_GetProcAddress(name);  if (!(var)) {*result = LOAD_OPENGL_FUNCTION_ERROR; return; } } while(0)
+#define LOAD_GL(type, var, name) do {var = (type)SDL_GL_GetProcAddress(name);  if (!var) {*result = LOAD_OPENGL_FUNCTION_ERROR; return; } } while(0)
 
 /**
  * @brief load all opengl functions
