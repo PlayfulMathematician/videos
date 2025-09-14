@@ -55,7 +55,7 @@
 /// @def max
 /// @brief The maximizer
 #ifndef max
-    #define max(a, b) (((a > b)) ? (a) : (b))
+    #define max(a, b) ((((a) > (b))) ? (a) : (b))
 #endif
 
 /// @def EPSILON
@@ -137,6 +137,7 @@
 #else
   #define POPEN  popen
   #define PCLOSE pclose
+#endif
 
 /** 
  * @brief Print out the error 
@@ -594,12 +595,12 @@ PFNGLBINDVERTEXARRAYPROC pglBindVertexArray;
 PFNGLDELETEVERTEXARRAYSPROC pglDeleteVertexArrays;
 PFNGLVALIDATEPROGRAMPROC pglValidateProgram;
 
-#define LOAD_GL(type, var, name) do {var = (type)SDL_GL_GetProcAddress(name);  if (!var) {*result = LOAD_OPENGL_FUNCTION_ERROR; return; } } while(0)
+#define LOAD_GL(type, var, name) do {var = (type)(uintptr_t)SDL_GL_GetProcAddress(name);  if (!var) {*result = LOAD_OPENGL_FUNCTION_ERROR; return; } } while(0)
 
 /**
- * @brief load all opengl functions
+ * @brief load all shader functions
  * @param result Did it succeed
- * @return nothing
+ * @return nothing lol
  */
 
 void load_gl_shader_functions(int* result)
