@@ -137,24 +137,6 @@
 #else
   #define POPEN  popen
   #define PCLOSE pclose
-#endif
-static PFNGLCREATESHADERPROC        pglCreateShader;
-static PFNGLSHADERSOURCEPROC        pglShaderSource;
-static PFNGLCOMPILESHADERPROC       pglCompileShader;
-static PFNGLGETSHADERIVPROC         pglGetShaderiv;
-static PFNGLGETSHADERINFOLOGPROC    pglGetShaderInfoLog;
-static PFNGLCREATEPROGRAMPROC       pglCreateProgram;
-static PFNGLATTACHSHADERPROC        pglAttachShader;
-static PFNGLLINKPROGRAMPROC         pglLinkProgram;
-static PFNGLGETPROGRAMIVPROC        pglGetProgramiv;
-static PFNGLGETPROGRAMINFOLOGPROC   pglGetProgramInfoLog;
-static PFNGLUSEPROGRAMPROC          pglUseProgram;
-static PFNGLGETUNIFORMLOCATIONPROC  pglGetUniformLocation;
-static PFNGLUNIFORM1FPROC           pglUniform1f;
-static PFNGLUNIFORM3FPROC           pglUniform3f;
-static PFNGLDETACHSHADERPROC        pglDetachShader;
-static PFNGLDELETESHADERPROC        pglDeleteShader;
-static PFNGLDELETEPROGRAMPROC       pglDeleteProgram;
 
 /** 
  * @brief Print out the error 
@@ -576,29 +558,89 @@ typedef struct
 }
 Lighting;
 
-#define LOAD_GL(type, var, name) do {var = (type)SDL_GL_GetProcAddress(name);  if (!(var)) { fprintf(stderr, "Missing GL function: %s\n", name); *result = LOAD_OPENGL_FUNCTION_ERROR; return; } } while(0)
+PFNGLCREATESHADERPROC pglCreateShader;
+PFNGLSHADERSOURCEPROC pglShaderSource;
+PFNGLCOMPILESHADERPROC pglCompileShader;
+PFNGLGETSHADERIVPROC pglGetShaderiv;
+PFNGLGETSHADERINFOLOGPROC pglGetShaderInfoLog;
+PFNGLCREATEPROGRAMPROC pglCreateProgram;
+PFNGLATTACHSHADERPROC pglAttachShader;
+PFNGLLINKPROGRAMPROC pglLinkProgram;
+PFNGLGETPROGRAMIVPROC pglGetProgramiv;
+PFNGLGETPROGRAMINFOLOGPROC pglGetProgramInfoLog;
+PFNGLUSEPROGRAMPROC pglUseProgram;
+PFNGLGETUNIFORMLOCATIONPROC pglGetUniformLocation;
+PFNGLUNIFORM1FPROC pglUniform1f;
+PFNGLUNIFORM3FPROC pglUniform3f;
+PFNGLDETACHSHADERPROC pglDetachShader;
+PFNGLDELETESHADERPROC pglDeleteShader;
+PFNGLDELETEPROGRAMPROC pglDeleteProgram;
+PFNGLUNIFORM1IPROC pglUniform1i;
+PFNGLUNIFORM2FPROC pglUniform2f;
+PFNGLUNIFORM4FPROC pglUniform4f;
+PFNGLUNIFORM1FVPROC pglUniform1fv;
+PFNGLUNIFORM3FVPROC pglUniform3fv;
+PFNGLUNIFORMMATRIX4FVPROC pglUniformMatrix4fv;
+PFNGLGETATTRIBLOCATIONPROC pglGetAttribLocation;
+PFNGLENABLEVERTEXATTRIBARRAYPROC pglEnableVertexAttribArray;
+PFNGLDISABLEVERTEXATTRIBARRAYPROC pglDisableVertexAttribArray;
+PFNGLVERTEXATTRIBPOINTERPROC pglVertexAttribPointer;
+PFNGLGENBUFFERSPROC pglGenBuffers;
+PFNGLBINDBUFFERPROC pglBindBuffer;
+PFNGLBUFFERDATAPROC pglBufferData;
+PFNGLDELETEBUFFERSPROC pglDeleteBuffers;
+PFNGLGENVERTEXARRAYSPROC pglGenVertexArrays;
+PFNGLBINDVERTEXARRAYPROC pglBindVertexArray;
+PFNGLDELETEVERTEXARRAYSPROC pglDeleteVertexArrays;
+PFNGLVALIDATEPROGRAMPROC pglValidateProgram;
 
-void load_gl_shader_functions(int* result) 
+#define LOAD_GL(type, var, name) do {var = (type)SDL_GL_GetProcAddress(name);  if (!(var)) {*result = LOAD_OPENGL_FUNCTION_ERROR; return; } } while(0)
+
+/**
+ * @brief load all opengl functions
+ * @param result Did it succeed
+ * @return nothing
+ */
+
+void load_gl_shader_functions(int* result)
 {
-    LOAD_GL(PFNGLCREATESHADERPROC,        pglCreateShader,        "glCreateShader");
-    LOAD_GL(PFNGLSHADERSOURCEPROC,        pglShaderSource,        "glShaderSource");
-    LOAD_GL(PFNGLCOMPILESHADERPROC,       pglCompileShader,       "glCompileShader");
-    LOAD_GL(PFNGLGETSHADERIVPROC,         pglGetShaderiv,         "glGetShaderiv");
-    LOAD_GL(PFNGLGETSHADERINFOLOGPROC,    pglGetShaderInfoLog,    "glGetShaderInfoLog");
-    LOAD_GL(PFNGLCREATEPROGRAMPROC,       pglCreateProgram,       "glCreateProgram");
-    LOAD_GL(PFNGLATTACHSHADERPROC,        pglAttachShader,        "glAttachShader");
-    LOAD_GL(PFNGLLINKPROGRAMPROC,         pglLinkProgram,         "glLinkProgram");
-    LOAD_GL(PFNGLGETPROGRAMIVPROC,        pglGetProgramiv,        "glGetProgramiv");
-    LOAD_GL(PFNGLGETPROGRAMINFOLOGPROC,   pglGetProgramInfoLog,   "glGetProgramInfoLog");
-    LOAD_GL(PFNGLUSEPROGRAMPROC,          pglUseProgram,          "glUseProgram");
-    LOAD_GL(PFNGLGETUNIFORMLOCATIONPROC,  pglGetUniformLocation,  "glGetUniformLocation");
-    LOAD_GL(PFNGLUNIFORM1FPROC,           pglUniform1f,           "glUniform1f");
-    LOAD_GL(PFNGLUNIFORM3FPROC,           pglUniform3f,           "glUniform3f");
-    LOAD_GL(PFNGLDETACHSHADERPROC,        pglDetachShader,        "glDetachShader");
-    LOAD_GL(PFNGLDELETESHADERPROC,        pglDeleteShader,        "glDeleteShader");
-    LOAD_GL(PFNGLDELETEPROGRAMPROC,       pglDeleteProgram,       "glDeleteProgram");
+    LOAD_GL(PFNGLCREATESHADERPROC, pglCreateShader, "glCreateShader");
+    LOAD_GL(PFNGLSHADERSOURCEPROC, pglShaderSource, "glShaderSource");
+    LOAD_GL(PFNGLCOMPILESHADERPROC, pglCompileShader, "glCompileShader");
+    LOAD_GL(PFNGLGETSHADERIVPROC, pglGetShaderiv, "glGetShaderiv");
+    LOAD_GL(PFNGLGETSHADERINFOLOGPROC, pglGetShaderInfoLog, "glGetShaderInfoLog");
+    LOAD_GL(PFNGLCREATEPROGRAMPROC, pglCreateProgram, "glCreateProgram");
+    LOAD_GL(PFNGLATTACHSHADERPROC, pglAttachShader, "glAttachShader");
+    LOAD_GL(PFNGLLINKPROGRAMPROC, pglLinkProgram, "glLinkProgram");
+    LOAD_GL(PFNGLGETPROGRAMIVPROC, pglGetProgramiv, "glGetProgramiv");
+    LOAD_GL(PFNGLGETPROGRAMINFOLOGPROC, pglGetProgramInfoLog, "glGetProgramInfoLog");
+    LOAD_GL(PFNGLUSEPROGRAMPROC, pglUseProgram, "glUseProgram");
+    LOAD_GL(PFNGLGETUNIFORMLOCATIONPROC, pglGetUniformLocation, "glGetUniformLocation");
+    LOAD_GL(PFNGLUNIFORM1FPROC, pglUniform1f, "glUniform1f");
+    LOAD_GL(PFNGLUNIFORM3FPROC, pglUniform3f, "glUniform3f");
+    LOAD_GL(PFNGLDETACHSHADERPROC, pglDetachShader, "glDetachShader");
+    LOAD_GL(PFNGLDELETESHADERPROC, pglDeleteShader, "glDeleteShader");
+    LOAD_GL(PFNGLDELETEPROGRAMPROC, pglDeleteProgram, "glDeleteProgram");
+    LOAD_GL(PFNGLUNIFORM1IPROC, pglUniform1i, "glUniform1i");
+    LOAD_GL(PFNGLUNIFORM2FPROC, pglUniform2f, "glUniform2f");
+    LOAD_GL(PFNGLUNIFORM4FPROC, pglUniform4f, "glUniform4f");
+    LOAD_GL(PFNGLUNIFORM1FVPROC, pglUniform1fv, "glUniform1fv");
+    LOAD_GL(PFNGLUNIFORM3FVPROC, pglUniform3fv, "glUniform3fv");
+    LOAD_GL(PFNGLUNIFORMMATRIX4FVPROC, pglUniformMatrix4fv, "glUniformMatrix4fv");
+    LOAD_GL(PFNGLGETATTRIBLOCATIONPROC, pglGetAttribLocation, "glGetAttribLocation");
+    LOAD_GL(PFNGLENABLEVERTEXATTRIBARRAYPROC, pglEnableVertexAttribArray, "glEnableVertexAttribArray");
+    LOAD_GL(PFNGLDISABLEVERTEXATTRIBARRAYPROC, pglDisableVertexAttribArray, "glDisableVertexAttribArray");
+    LOAD_GL(PFNGLVERTEXATTRIBPOINTERPROC, pglVertexAttribPointer, "glVertexAttribPointer");
+    LOAD_GL(PFNGLGENBUFFERSPROC, pglGenBuffers, "glGenBuffers");
+    LOAD_GL(PFNGLBINDBUFFERPROC, pglBindBuffer, "glBindBuffer");
+    LOAD_GL(PFNGLBUFFERDATAPROC, pglBufferData, "glBufferData");
+    LOAD_GL(PFNGLDELETEBUFFERSPROC, pglDeleteBuffers, "glDeleteBuffers");
+    LOAD_GL(PFNGLGENVERTEXARRAYSPROC, pglGenVertexArrays, "glGenVertexArrays");
+    LOAD_GL(PFNGLBINDVERTEXARRAYPROC, pglBindVertexArray, "glBindVertexArray");
+    LOAD_GL(PFNGLDELETEVERTEXARRAYSPROC, pglDeleteVertexArrays, "glDeleteVertexArrays");
+    LOAD_GL(PFNGLVALIDATEPROGRAMPROC, pglValidateProgram, "glValidateProgram");
+
     *result = SUCCESS;
-    return;
 }
 
 /**
