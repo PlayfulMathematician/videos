@@ -661,6 +661,7 @@ GLuint compile_shader(int* result, const char* src, GLenum type)
     if (!_) 
     {
         *result = OPENGL_SHADER_COMPILATION_ERROR;
+        pglDeleteShader(shader);
         return 0;
     }
     *result = SUCCESS;
