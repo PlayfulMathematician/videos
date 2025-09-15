@@ -106,17 +106,17 @@
 #define IS_AN_ERROR(x) ((STATUS_TYPE((x)) == FATAL) || (STATUS_TYPE((x)) == NONFATAL))
 
 // Error codes
-#define TRI_INIT_MALLOC_FAIL 0x03000000   ///< Triangulation malloc failed.
-#define TRI_NOT_FOUND 0x03000001          ///< Triangulation pointer was NULL.
+#define TRI_INIT_MALLOC_FAIL 0x03000000 ///< Triangulation malloc failed.
+#define TRI_NOT_FOUND 0x03000001 ///< Triangulation pointer was NULL.
 #define ADDING_TRI_REALLOC_FAILURE 0x03000002 ///< Realloc failed while adding triangle.
-#define PSLG_INIT_MALLOC_ERROR 0x03000003     ///< PSLG struct allocation failed.
-#define PSLG_VERTEX_MALLOC_ERROR 0x03000004   ///< Vertex allocation failed.
-#define PSLG_EDGE_MALLOC_ERROR 0x03000005     ///< Edge allocation failed.
+#define PSLG_INIT_MALLOC_ERROR 0x03000003 ///< PSLG struct allocation failed.
+#define PSLG_VERTEX_MALLOC_ERROR 0x03000004 ///< Vertex allocation failed.
+#define PSLG_EDGE_MALLOC_ERROR 0x03000005 ///< Edge allocation failed.
 #define PSLG_EDGE_SPLIT_VERTEX_REALLOC_ERROR 0x03000006 ///< Realloc failed in split (vertices).
-#define PSLG_EDGE_SPLIT_EDGE_REALLOC_ERROR 0x03000007   ///< Realloc failed in split (edges).
+#define PSLG_EDGE_SPLIT_EDGE_REALLOC_ERROR 0x03000007 ///< Realloc failed in split (edges).
 #define PSLG_TRIANGULATION_INIT_MALLOC_ERROR 0x03000008 ///< Coupled PSLG+tri malloc failed.
-#define PSLG_ATTACK_TEMP_EDGES_MALLOC_ERROR 0x03000009  ///< Attack: malloc for temp edges failed.
-#define PSLG_ATTACK_EDGE_REALLOCATION_ERROR 0x0300000a  ///< Attack: realloc failed on edges.
+#define PSLG_ATTACK_TEMP_EDGES_MALLOC_ERROR 0x03000009 ///< Attack: malloc for temp edges failed.
+#define PSLG_ATTACK_EDGE_REALLOCATION_ERROR 0x0300000a ///< Attack: realloc failed on edges.
 #define TRIANGULATE_POLYHEDRON_BATCH_TRIANGULATIONS_MALLOC_ERROR 0x0300000b ///< Allocating an array of triangulation pointers failed when triangulation a polyhedron.
 #define TRIANGULATE_POLYHEDRON_VERTEX_MALLOC_ERROR 0x0300000c ///< When triangulating the polyhedron, allocating memory for vertices failed
 #define POLYHEDRON_MALLOC_ERROR 0x0300000d ///< When allocating memory for polyhedron, malloc failed
@@ -136,7 +136,9 @@
 #define LOAD_OPENGL_FUNCTION_ERROR 0x0300001b ///< If an OPENGL function fails we are screwed
 #define OPENGL_SHADER_COMPILATION_ERROR 0x0300001c ///< When compiling a shader an error occured
 #define OPENGL_SHADER_PROGRAM_LINK_ERROR 0x0300001d ///< When linking a shader program an error occured
-
+#define DRAW_TRIANGULATION_MALLOC_ERROR 0x0300001e ///< When drawing a trianglulation, malloc failed
+#define TRI_CLONE_ERROR 0x0300001f ///< Malloc failed when cloning a triangulation
+#define TRI_CLONE_TRI_ERROR 0x03000020 ///< Malloc failed when cloning the triangles in a triangulation
 #ifdef _WIN32
   #define POPEN  _popen
   #define PCLOSE _pclose
@@ -144,6 +146,42 @@
   #define POPEN  popen
   #define PCLOSE pclose
 #endif
+
+const char* triangulation_vs = 
+    "#version 120\n"
+    "attribute vec3 position;\n"
+    "attribute vec3 normal;\n"
+    "varying vec3 vNormal;\n"
+    "varying vec3 vPos;\n"
+    "void main()\n"
+    "{\n"
+    "   gl_Position = gl_ModelViewProjectionMatrix * vec4(position, 1.0);\n"
+    "   vPos = vec3(gl_ModelViewMatrix * vec4(position, 1.0));\n"
+    "   vNormal = normalize(gl_NormalMatrix * normal);\n"
+    "}\n";
+
+const char* triangulation_fs = 
+    "#version 120\n"
+    "varying vec3 vNormal;\n"
+    "varying vec3 vPos;\n"
+    "void main()" 
+    "{\n"
+    "   vec3 N = normalize(vNormal);\n"
+    "   vec3 L = normalize(vec3(0.0, 0.0, 1.0) - vPos);\n"
+    "   vec3 V = normalize(-vPos);\n"
+    "   vec3 R = reflect(-L, N);\n"
+    "   vec3 ambient = vec3(0.15, 0.15, 0.20);\n"
+    "   float diff = max(dot(N, L), 0.0);\n"
+    "   vec3 diffuse = diff * vec3(0.9, 0.9, 0.9);\n"
+    "   float spec = 0.0;\n"
+    "   if (diff > 0.0)\n"
+    "   {\n"
+    "       spec = pow(max(dot(R, V), 0.0), 32.0);\n"
+    "   }\n"
+    "   vec3 specular = spec * vec3(0.8, 0.8, 0.8);\n"
+    "   vec3 color = ambient + diffuse + specular;\n"
+    "   gl_FragColor = vec4(color, 1.0);\n"
+    "}\n";
 
 /** 
  * @brief Print out the error 
@@ -249,8 +287,17 @@ void print_error(int error)
         case OPENGL_SHADER_PROGRAM_LINK_ERROR:
             fprintf(stderr, "When linking a shader program an error occured\n");
             break;
+        case DRAW_TRIANGULATION_MALLOC_ERROR:
+            fprintf(stderr, "When drawing a trianglulation, malloc failed\n");
+            break;
+        case TRI_CLONE_ERROR:
+            fprintf(stderr, "When using malloc to clone a triangulation, malloc failed");
+            break;
+        case TRI_CLONE_TRI_ERROR:
+            fprintf(stderr, "When using malloc to clone the triangles within a triangulation, malloc failed");
+            break;
         default:
-            fprintf(stderr, "SOMETHING BAD HAPPENED\n");
+            fprintf(stderr, "SOMETHING BAD HAPPENED, WE DON'T KNOW WHAT");
             break;
     } 
 }
@@ -348,6 +395,38 @@ typedef struct
 Triangulation;
 
 /**
+ * @brief A Quaternion
+ */
+
+typedef union 
+{   
+    struct 
+    {
+        /**
+         * @brief The i component
+         */
+        float x;
+        /**
+         * @brief The j component
+         */
+        float y;
+        /**
+         * @brief The k component
+         */
+        float z;
+        /**
+         * @brief The scalar component
+         */
+        float w;
+    };
+    /**
+     * @brief An array to store it
+     */
+    float v[4];
+} 
+Quaternion;
+
+/**
  * @brief Literally just a PSLG and a Triangulation
  */
 
@@ -373,7 +452,7 @@ typedef struct
     /**
      * @brief This stores all of the data
      */
-    void** data;
+    void* data;
     /**
     * @brief How big is the dumpster;
     */
@@ -404,23 +483,23 @@ struct Animation
     /**
      * @brief The construction function to be run on animation start
      */
-    void (*construct)(struct Animation*);
+    void (*construct)(int* result, struct Animation*);
     /**
      * @brief The function run before a frame is rendered.
      */
-    void (*preproc)(struct Animation*, int t);
+    void (*preproc)(int* result, struct Animation*, int t);
     /**
      * @brief The function run for rendering
      */
-    void (*render)(struct Animation*, int t);
+    void (*render)(int* result, struct Animation*, int t);
     /**
      * @brief The post processing function
      */
-    void (*postproc)(struct Animation*, int t);
+    void (*postproc)(int* result, struct Animation*, int t);
     /**
      * @brief The free function 
      * */
-    void (*free)(struct Animation*);
+    void (*free)(int* result, struct Animation*);
     /**
      * @brief Put data here
      */
@@ -458,7 +537,7 @@ struct AnimationSection
      * @brief Why is this here!?!
      * @remark Consider removing
      */
-    void (*init)(struct AnimationSection*);
+    void (*init)(int* result, struct AnimationSection*);
     /**
      * @brief A pointer an object that has a pointer to this object. 
      */
@@ -533,43 +612,6 @@ struct GlobalBuffer
      */
     VideoData* videodata;
 };
-
-/**
- * @brief A lighting object for OpenGL
- */
-typedef struct
-{
-    /**
-     * @brief The OpenGL light ID (GL_LIGHT0, GL_LIGHT1, etc.)
-     */
-    int id;
-
-    /**
-     * @brief The position of the light in world space.
-     */
-    Vec3 position;
-
-    /**
-     * @brief The ambient color contribution.
-     */
-    Vec3 ambient;
-
-    /**
-     * @brief The diffuse color contribution.
-     */
-    Vec3 diffuse;
-
-    /**
-     * @brief The specular color contribution.
-     */
-    Vec3 specular;
-
-    /**
-     * @brief Whether the light is enabled.
-     */
-    bool enabled;
-}
-Lighting;
 
 PFNGLCREATESHADERPROC pglCreateShader;
 PFNGLSHADERSOURCEPROC pglShaderSource;
@@ -668,7 +710,7 @@ void load_gl_shader_functions(int* result)
 GLuint compile_shader(int* result, const char* src, GLenum type) 
 {
     GLuint shader = pglCreateShader(type);
-    pglShaderSource(shader, 1, &src, NULL);
+    pglShaderSource(shader, 1, &src, null);
     pglCompileShader(shader);
     GLint _;
     pglGetShaderiv(shader, GL_COMPILE_STATUS, &_);
@@ -689,16 +731,16 @@ GLuint compile_shader(int* result, const char* src, GLenum type)
  * @return The shader program
  */
 
-GLuint create_shader_program(const char* vs_src, const char* fs_src) 
+GLuint create_shader_program(int* result, const char* vs_src, const char* fs_src) 
 {
-    GLuint vs = compile_shader(vs_src, GL_VERTEX_SHADER);
-    GLuint fs = compile_shader(fs_src, GL_FRAGMENT_SHADER);
+    GLuint vs = compile_shader(result, vs_src, GL_VERTEX_SHADER);
+    GLuint fs = compile_shader(result, fs_src, GL_FRAGMENT_SHADER);
     GLuint prog = pglCreateProgram();
     pglAttachShader(prog, vs);
     pglAttachShader(prog, fs);
     pglLinkProgram(prog);
     GLint _;
-    pglGetProgramiv(prog, GL_LINK_STATUS, &ok);
+    pglGetProgramiv(prog, GL_LINK_STATUS, &_);
     if (!_) 
     {
         *result = OPENGL_SHADER_PROGRAM_LINK_ERROR;
@@ -712,70 +754,30 @@ GLuint create_shader_program(const char* vs_src, const char* fs_src)
     return prog;
 }
 
-
-/**
- * @brief Construct a light with default parameters.
- * @param id The Id
- * @param pos The position
- * @return Your light
- */
-
-Lighting create_light(int id, Vec3 pos)
-{
-    Lighting l;
-    l.id       = id;
-    l.position = pos;
-    l.ambient  = (Vec3){0.15f, 0.15f, 0.20f};
-    l.diffuse  = (Vec3){0.90f, 0.90f, 0.90f};
-    l.specular = (Vec3){0.80f, 0.80f, 0.80f};
-    l.enabled  = true;
-    return l;
-}
-
-/**
- * @brief apply it
- * @param l lighting
- * @return Nothing.
- */
-
-void apply_light(Lighting* l)
-{
-    if (!l->enabled)
-    {
-        glDisable(l->id);
-        return;
-    }
-    glEnable(GL_LIGHTING);
-    glEnable(l->id);
-
-    GLfloat ambient[4] = {l->ambient.x,  l->ambient.y,  l->ambient.z,  1.0f};
-    GLfloat diffuse[4] = {l->diffuse.x,  l->diffuse.y,  l->diffuse.z,  1.0f};
-    GLfloat specular[4] = {l->specular.x, l->specular.y, l->specular.z, 1.0f};
-    GLfloat pos[4] = {l->position.x, l->position.y, l->position.z, 1.0f};
-    glLightfv(l->id, GL_AMBIENT,  ambient);
-    glLightfv(l->id, GL_DIFFUSE,  diffuse);
-    glLightfv(l->id, GL_SPECULAR, specular);
-    glLightfv(l->id, GL_POSITION, pos);
-    glEnable(GL_NORMALIZE);
-    glEnable(GL_COLOR_MATERIAL);
-    glColorMaterial(GL_FRONT, GL_AMBIENT_AND_DIFFUSE);
-}
-
 /**
  * @brief This gets the frame buffer
  * @param[out] result The result value
  * @param w The width
  * @param h The height
+ * @param previous_buffer A previous buffer
  * @return the framebuffer
  */
 
-unsigned char* get_framebuffer_rgb(int* result, int w, int h) 
+unsigned char* get_framebuffer_rgb(int* result, int w, int h, unsigned char* previous_buffer) 
 {
-    unsigned char* rgb = malloc(w * h * 3);
-    if (!rgb) 
+    unsigned char* rgb;
+    if (!previous_buffer)
     {
-        *result = RGB_BUFFER_MALLOC_ERROR;
-        return null;
+        rgb = malloc(w * h * 3);
+        if (!rgb) 
+        {
+            *result = RGB_BUFFER_MALLOC_ERROR;
+            return null;
+        }
+    }
+    else
+    {
+        rgb = previous_buffer;
     }
     glPixelStorei(GL_PACK_ALIGNMENT, 1);
     glReadPixels(0, 0, w, h, GL_RGB, GL_UNSIGNED_BYTE, rgb);
@@ -816,6 +818,38 @@ void close_ffmpeg_pipe(FILE* pipef)
     }
 }
 
+/**
+ * @brief It outputs a brand new triangulation
+ * @param[out] result The result is set to all the goofy errors.
+ * @param src The triangulation to be cloned
+ * @return The triangulation
+ */
+
+Triangulation* clone_triangulation(int* result, Triangulation* src)
+{
+    Triangulation* tri = malloc(sizeof(Triangulation));
+    if (!tri)
+    {   
+        *result = TRI_CLONE_ERROR;
+        return null; 
+    }
+    tri->triangle_count = src->triangle_count;
+    tri->triangles = malloc(sizeof(Vec3[3]) * BIT_ALIGN(src->triangle_count));
+    if (!tri->triangles)
+    {
+        free(tri);
+        *result = TRI_CLONE_TRI_ERROR;
+        return null;
+    }
+    for (int i = 0; i < tri->triangle_count; i++)
+    {
+        tri->triangles[i][0] = src->triangles[i][0];
+        tri->triangles[i][1] = src->triangles[i][1];
+        tri->triangles[i][2] = src->triangles[i][2];
+    }
+    *result = SUCCESS;
+    return tri;
+} 
 
 /**
  * @brief It outputs an empty triangulations
@@ -833,6 +867,7 @@ Triangulation* empty_triangulation(int* result)
     }
     tri->triangle_count = 0;
     tri->triangles = null;
+    *result = SUCCESS;
     return tri;
 
 } 
@@ -1034,12 +1069,13 @@ bool equal_vec3(Vec3 a, Vec3 b)
 
 Vec3 normalize_vec3(Vec3 a)
 {
-    if (magnitude_vec3(a) < EPSILON)
+    float mag = magnitude_vec3(a);
+    if (mag < EPSILON)
     {
         Vec3 f = {0, 0, 0};
         return f;
     }
-    return multiply_vec3(a, 1 / magnitude_vec3(a));
+    return multiply_vec3(a, 1 / mag);
 }
 
 /**
@@ -1074,6 +1110,102 @@ Vec3 normal_vec3(Vec3 a, Vec3 b, Vec3 c)
     Vec3 AC = subtract_vec3(c, a);
     Vec3 n  = cross_vec3(AB, AC);   
     return normalize_vec3(n);        
+}
+
+/**
+ * @brief This multiplies two quaternions
+ * @param q1 the first one 
+ * @param q2 the second one
+ * @return q1 * q2
+ */
+
+Quaternion quat_mul(Quaternion q1, Quaternion q2)
+{
+    return (Quaternion) 
+    {
+        .x = q1.w*q2.x + q1.x*q2.w + q1.y*q2.z - q1.z*q2.y,
+        .y = q1.w*q2.y - q1.x*q2.z + q1.y*q2.w + q1.z*q2.x,
+        .z = q1.w*q2.z + q1.x*q2.y - q1.y*q2.x + q1.z*q2.w,
+        .w = q1.w*q2.w - q1.x*q2.x - q1.y*q2.y - q1.z*q2.z
+    };
+}
+
+/**
+ * @brief This conjugates a quaternion
+ * @param q This is the quaternion
+ * @return This returns the conjugate of the quaternion
+ */
+
+Quaternion quat_conjugate(Quaternion q) 
+{
+    return (Quaternion)
+    {   
+        .x=-q.x, 
+        .y=-q.y, 
+        .z=-q.z, 
+        .w=q.w 
+    };
+}
+
+/**
+ * @brief This generates a quaternion from an angle/axis
+ * @param axis This is the axis to rotate around
+ * @param angle This is the angle of rotation
+ * @return A quaternion
+ */
+
+Quaternion quat_from_axis_angle(Vec3 axis, float angle) 
+{
+    axis = normalize_vec3(axis);
+    float half = angle * 0.5f;
+    float s = sinf(half);
+
+    return (Quaternion)
+    { 
+        .x=axis.x*s, 
+        .y=axis.y*s, 
+        .z=axis.z*s, 
+        .w=cosf(half) 
+    };
+}
+
+/**
+ * @brief This uses a rotation quaternion to rotate a vector
+ * @param q The quaternion
+ * @param v The vector
+ * @return The new rotated vec3.
+ */
+
+Vec3 quat_rotate_vec3(Quaternion q, Vec3 v) 
+{
+    Quaternion vq = { 
+        .x=v.x, 
+        .y=v.y, 
+        .z=v.z, 
+        .w=0.0f 
+    };
+    Quaternion qi = quat_conjugate(q);
+    Quaternion r = quat_mul(quat_mul(q, vq), qi);
+    return (Vec3)
+    { 
+        r.x, 
+        r.y, 
+        r.z 
+    };
+}
+
+/**
+ * @brief This generates a quaternion from an angle/axis
+ * @param axis This is the axis to rotate around
+ * @param angle This is the angle of rotation
+ * @param vec This is the vector to be rotated
+ * @return A vector
+ */
+
+Vec3 rotate_vector(Vec3 axis, float angle, Vec3 vec) 
+{
+    Quaternion q = quat_from_axis_angle(axis, angle);
+    return quat_rotate_vec3(q, vec);
 }
 
 /**
@@ -2069,12 +2201,13 @@ Polyhedron* create_polyhedron(int* result, int nv, int nf)
 
 /**
  * @brief This takes a global buffer and renders it
+ * @param[out] result The result of the function
  * @param gb This is the global buffer to be rendered
  * @param t This is the frame index
  * @return This returns nothing
  */
 
-void render_gb(GlobalBuffer* gb, int t)
+void render_gb(int* result, GlobalBuffer* gb, int t)
 {
     for(int i = 0; i < gb->videodata->section_count; i++)
     {
@@ -2089,7 +2222,7 @@ void render_gb(GlobalBuffer* gb, int t)
         }    
         if (t == animation_section->start_t)
         {
-            animation_section->init(animation_section);
+            animation_section->init(result, animation_section);
         }
         if (t == animation_section->end_t)
         {
@@ -2102,17 +2235,17 @@ void render_gb(GlobalBuffer* gb, int t)
             Animation* a = &animation_section->animations[j];
             if (a->start_t == t)
             {
-                a->construct(a);
+                a->construct(result, a);
             }
             if (a->start_t <= t && a->end_t >= t)
             {
-                a->preproc(a, t);
-                a->render(a, t);
-                a->postproc(a, t);
+                a->preproc(result, a, t);
+                a->render(result, a, t);
+                a->postproc(result, a, t);
             }
             if (a->end_t == t)
             {
-                a->free(a);
+                a->free(result, a);
             }
         }
     }
@@ -2464,29 +2597,77 @@ void write_to_stl(int* result, Triangulation* tri, FILE* fin)
 }
 
 /**
- * @brief Draw every triangle for die
- * @param tri triangulation
- * @return Nothing
+ * @brief Uploads and draws a triangulation using shaders.
+ * @param[out] result If any fail occured.
+ * @param prog The shader program (with "position" and "normal" attributes).
+ * @param tri  The triangulation to draw.
  */
 
-void draw_triangle(Triangulation tri)
+void draw_triangulation(int* result, GLuint prog, Triangulation* tri)
 {
-    for(int i = 0; i < tri.triangle_count; i++)
+    float* data = malloc(sizeof(float) * tri->triangle_count * 3 * 6);
+    if (!data) 
     {
-        Vec3 a = tri.triangles[i][0];
-        Vec3 b = tri.triangles[i][1];
-        Vec3 c = tri.triangles[i][2];
-
-
-        Vec3 n = normal_vec3(a, b, c);
-        glBegin(GL_TRIANGLES);
-            glNormal3f(n.x, n.y, n.z);
-            glVertex3f(a.x, a.y, a.z);
-            glVertex3f(b.x, b.y, b.z);
-            glVertex3f(c.x, c.y, c.z);
-        glEnd();
+        *result = DRAW_TRIANGULATION_MALLOC_ERROR;
+        return;
     }
+
+    for (int i = 0; i < tri->triangle_count; i++) 
+    {
+        Vec3 a = tri->triangles[i][0];
+        Vec3 b = tri->triangles[i][1];
+        Vec3 c = tri->triangles[i][2];
+        Vec3 n = normal_vec3(a, b, c); 
+
+        int base = i * 18; 
+        float v[18] = 
+        {
+            a.x, a.y, a.z, n.x, n.y, n.z,
+            b.x, b.y, b.z, n.x, n.y, n.z,
+            c.x, c.y, c.z, n.x, n.y, n.z
+        };
+        memcpy(&data[base], v, sizeof(v));
+    }
+
+    GLuint vao;
+    GLuint vbo;
+    pglGenVertexArrays(1, &vao);
+    pglBindVertexArray(vao);
+    pglGenBuffers(1, &vbo);
+    pglBindBuffer(GL_ARRAY_BUFFER, vbo);
+    pglBufferData(GL_ARRAY_BUFFER, sizeof(float) * tri->triangle_count * 18, data, GL_STATIC_DRAW);
+    free(data);
+    GLint posLoc  = pglGetAttribLocation(prog, "position");
+    GLint normLoc = pglGetAttribLocation(prog, "normal");
+    if (posLoc >= 0) 
+    {
+        pglEnableVertexAttribArray(posLoc);
+        pglVertexAttribPointer(posLoc, 3, GL_FLOAT, GL_FALSE, sizeof(float)*6, (void*)0);
+    }
+    if (normLoc >= 0) 
+    {
+        pglEnableVertexAttribArray(normLoc);
+        pglVertexAttribPointer(normLoc, 3, GL_FLOAT, GL_FALSE, sizeof(float)*6, (void*)(sizeof(float)*3));
+    }
+
+    pglUseProgram(prog);
+    glDrawArrays(GL_TRIANGLES, 0, tri->triangle_count * 3);
+
+    if (posLoc >= 0) 
+    {
+        pglDisableVertexAttribArray(posLoc);
+    }
+    if (normLoc >= 0) 
+    {
+        pglDisableVertexAttribArray(normLoc);
+    }
+    pglBindBuffer(GL_ARRAY_BUFFER, 0);
+    pglBindVertexArray(0);
+
+    pglDeleteBuffers(1, &vbo);
+    pglDeleteVertexArrays(1, &vao);
 }
+
 
 
 /**
@@ -2548,12 +2729,24 @@ int main(int argc, char *argv[])
         SDL_WINDOW_OPENGL | SDL_WINDOW_SHOWN);
 
     SDL_GLContext ctx = SDL_GL_CreateContext(win);
+    load_gl_shader_functions(&result);
+    if (IS_AN_ERROR(result)) {
+        print_error(result);
+        return 1;
+    }
+    GLuint prog = create_shader_program(&result, triangulation_vs, triangulation_fs);
+    if (IS_AN_ERROR(result)) {
+        print_error(result);
+        return 1;
+    }
+
+    
+
     glEnable(0x809D);
     glEnable(GL_DEPTH_TEST);
     SDL_Event e;
     float angle = 0;
     int running = 1;
-    Lighting light0 = create_light(GL_LIGHT0, (Vec3){0.0f, 0.0f, 1.0f});
     FILE* pipef = open_ffmpeg_pipe(800, 600, 60, "out.mp4");  
     if (!pipef) 
     {
@@ -2580,15 +2773,15 @@ int main(int argc, char *argv[])
         glTranslatef(0,0,-3);
         angle+=0.15;
         glRotatef(angle, 1, 1, 0);   
-        apply_light(&light0);
-     
-
-        draw_triangle(*tri);        
+        pglUseProgram(prog);                  
+        draw_triangulation(&result, prog, tri);        
+        pglUseProgram(0);                    
+            
 
         SDL_GL_SwapWindow(win);
         int w = 800, h = 600;
         int frame_result;
-        unsigned char* rgb = get_framebuffer_rgb(&frame_result, w, h);
+        unsigned char* rgb = get_framebuffer_rgb(&frame_result, w, h, null);
         if (frame_result == SUCCESS && rgb) 
         {
             fwrite(rgb, 1, w*h*3, pipef);  
