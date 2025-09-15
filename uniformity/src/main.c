@@ -303,6 +303,74 @@ void print_error(int error)
 }
 
 /**
+ * @brief The face data 
+ */
+
+typedef struct 
+{
+
+    /**
+     * @brief The color
+     */
+
+    union 
+    {
+
+        /**
+         * @brief This is the actual RGBA components
+         */
+
+        struct 
+        {
+
+            /**
+             * @brief The red component
+             */
+
+            uint8_t r;
+
+            /**
+             * @brief The Green Component
+             */
+
+            uint8_t g;
+
+            /**
+             * @brief The blue component
+             */
+
+            uint8_t b;
+
+            /**
+             * @brief The Alpha Channel (transparency)
+             */
+
+            uint8_t a;   
+        };
+
+        /**
+         * @brief The colors byte packed (RRGGBBAA)
+         */
+
+        uint32_t rgba; 
+
+        /**
+         * @brief The components (list)
+         */
+
+        uint8_t v[4]; 
+    } 
+    color;
+
+    /**
+     * The normal of the face (normalized)
+     */
+
+    Vec3 normal;
+} 
+FaceData;
+
+/**
  * @brief A 3 dimensional vector 
  */
 
@@ -349,6 +417,10 @@ typedef struct
      * @brief The sizes of each face 
      * */
     int* face_sizes;
+    /**
+     * @brief face data
+     */
+    FaceData* fd;
 } 
 Polyhedron;
 
@@ -391,6 +463,12 @@ typedef struct
      *  @brief The number of triangles
      *  */
     int triangle_count;
+    /**
+     * @brief Pointer to specific face data
+     */
+    FaceData* fd;
+    
+    
 }
 Triangulation;
 
