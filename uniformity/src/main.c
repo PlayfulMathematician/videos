@@ -47,6 +47,7 @@
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_mixer.h>
 #include <SDL2/SDL_opengl.h>
+#include <zlib.h>
 #ifdef __APPLE__
     #include <OpenGL/gl.h>
 #else
@@ -67,9 +68,9 @@
 #define null ((void*)0)
 #undef NULL
 
-/// @def LINE_LENGTH
-/// @brief The Length of a line 
-#define LINE_LENGTH 1024
+/// @def BUFFER_SIZE
+/// @brief The size of a buffer
+#define BUFFER_SIZE 1024
 
 /// @def BIT_IGNORE
 /// @brief Alignment granularity in bits (round up to 2^BIT_IGNORE).
@@ -139,6 +140,12 @@
 #define DRAW_TRIANGULATION_MALLOC_ERROR 0x0300001e ///< When drawing a trianglulation, malloc failed
 #define TRI_CLONE_ERROR 0x0300001f ///< Malloc failed when cloning a triangulation
 #define TRI_CLONE_TRI_ERROR 0x03000020 ///< Malloc failed when cloning the triangles in a triangulation
+#define PDF_XREF_FIND_SEEK_END_ERROR 0x03000021 ///< When trying to find the xref table in a pdf, fseek failed to seek to the end
+#define PDF_XREF_FIND_FTELL_ERROR 0x03000022 ///< When trying to find the xref table in a pdf, ftell failed
+#define PDF_XREF_FIND_SEEK_SET_ERROR 0x03000023 ///< When trying to find the xref table in a pdf, fseek failed to set the seek
+#define PDF_XREF_STARTXREF_NOT_FOUND 0x03000024 ///< When trying to find the xref table in a pdf, the string startxref was not found
+#define PDF_XREF_OFFSET_PARSE_ERROR 0x03000025 ///< When trying to find the xref table in the pdf the offset could not be properly parsed.
+
 #ifdef _WIN32
   #define POPEN  _popen
   #define PCLOSE _pclose
@@ -291,16 +298,52 @@ void print_error(int error)
             fprintf(stderr, "When drawing a trianglulation, malloc failed\n");
             break;
         case TRI_CLONE_ERROR:
-            fprintf(stderr, "When using malloc to clone a triangulation, malloc failed");
+            fprintf(stderr, "When using malloc to clone a triangulation, malloc failed\n");
             break;
         case TRI_CLONE_TRI_ERROR:
-            fprintf(stderr, "When using malloc to clone the triangles within a triangulation, malloc failed");
+            fprintf(stderr, "When using malloc to clone the triangles within a triangulation, malloc failed\n");
+            break;
+        case PDF_XREF_FIND_SEEK_END_ERROR:
+            fprintf(stderr, "When trying to find the xref table in a pdf, fseek failed to seek to the end\n");
+            break;
+        case PDF_XREF_FIND_FTELL_ERROR:
+            fprintf(stderr,"When trying to find the xref table in a pdf, ftell failed\n");
+            break;
+        case PDF_XREF_FIND_SEEK_SET_ERROR:
+            fprintf(stderr, "When trying to find the xref table in a pdf, fseek failed to set the seek\n");
+            break;
+        case PDF_XREF_STARTXREF_NOT_FOUND:
+            fprintf(stderr, "When trying to find the xref table in a pdf, the string startxref was not found\n");
+            break;
+        case PDF_XREF_OFFSET_PARSE_ERROR:
+            fprintf(stderr, "When trying to find the xref table in the pdf the offset could not be properly parsed.\n")
             break;
         default:
             fprintf(stderr, "SOMETHING BAD HAPPENED, WE DON'T KNOW WHAT");
             break;
     } 
 }
+
+/**
+ * @brief A 3 dimensional vector 
+ */
+
+typedef struct 
+{
+    /** 
+     * @brief X Coordinate 
+     * */
+    float x;
+    /** 
+     * @brief Y Coordinate 
+     * */
+        float y; 
+    /** 
+     * @brief Z Coordinate 
+     * */
+    float z; 
+} 
+Vec3;
 
 /**
  * @brief The face data 
@@ -369,27 +412,6 @@ typedef struct
     Vec3 normal;
 } 
 FaceData;
-
-/**
- * @brief A 3 dimensional vector 
- */
-
-typedef struct 
-{
-    /** 
-     * @brief X Coordinate 
-     * */
-    float x;
-    /** 
-     * @brief Y Coordinate 
-     * */
-        float y; 
-    /** 
-     * @brief Z Coordinate 
-     * */
-    float z; 
-} 
-Vec3;
 
 /**
  * @brief A polyhedron object. To serialize polyhedra.
@@ -690,6 +712,52 @@ struct GlobalBuffer
      */
     VideoData* videodata;
 };
+
+/**
+ * @brief This grabs the location of the xref table in a PDF file
+ * @param[out] result The success/failing
+ * @param f The PDF file
+ * @return The offset
+ */
+
+long findxref(int* result, FILE* f)
+{
+    char buf[BUFFER_SIZE + 1];
+    long filesize;
+    if (fseek(f, 0, SEEK_END) != 0) 
+    {
+        *result = PDF_XREF_FIND_SEEK_END_ERROR;
+        return -1;
+    }
+    filesize = ftell(f);
+    if (filesize < 0) 
+    {
+        *result = PDF_XREF_FIND_FTELL_ERROR;
+        return -1;
+    }
+    if (fseek(f, max(filesize - BUFFER_SIZE, 0), SEEK_SET) != 0) 
+    {
+        *result = PDF_XREF_FIND_SEEK_SET_ERROR;
+        return -1;
+    }
+    size_t n = fread(buf, 1, BUFFER_SIZE, f);
+    buf[n] = '\0';
+    char *pos = strstr(buf, "startxref");
+    if (!pos) 
+    {
+        *result = PDF_XREF_STARTXREF_NOT_FOUND;
+        return -1;
+    }
+    long offset = -1;
+    if (sscanf(pos + 9, "%ld", &offset) != 1) 
+    {
+        *result = PDF_XREF_OFFSET_PARSE_ERROR;
+        return -1;
+    }
+    *result = SUCCESS;
+
+    return offset;
+}
 
 PFNGLCREATESHADERPROC pglCreateShader;
 PFNGLSHADERSOURCEPROC pglShaderSource;
@@ -2343,7 +2411,7 @@ void render_gb(int* result, GlobalBuffer* gb, int t)
 
 void read_clean_line(int* result, FILE* fin, char* buf)
 {
-    for (;fgets(buf, LINE_LENGTH, fin);) 
+    for (;fgets(buf, BUFFER_SIZE, fin);) 
     {
         buf[strcspn(buf, "\r\n")] = 0;             
         char* h = strchr(buf, '#'); 
@@ -2382,7 +2450,7 @@ void read_clean_line(int* result, FILE* fin, char* buf)
 
 void read_off_header(int* result, FILE* fin, int* nv, int* nf)
 {
-    char line[LINE_LENGTH];
+    char line[BUFFER_SIZE];
     read_clean_line(result, fin, line);
     if (IS_AN_ERROR(*result))
     {
@@ -2426,7 +2494,7 @@ void read_off_header(int* result, FILE* fin, int* nv, int* nf)
 
 void read_vertex(int* result, FILE* fin, Polyhedron* poly, int vertex_idx)
 {
-    char line[LINE_LENGTH];
+    char line[BUFFER_SIZE];
     read_clean_line(result, fin, line);
     if (IS_AN_ERROR(*result))
     {
@@ -2467,7 +2535,7 @@ void read_vertex(int* result, FILE* fin, Polyhedron* poly, int vertex_idx)
 
 void read_face(int* result, FILE* fin, Polyhedron* poly, int face_idx)
 {
-    char line[LINE_LENGTH];
+    char line[BUFFER_SIZE];
     read_clean_line(result, fin, line);
     if (IS_AN_ERROR(*result))
     {
@@ -2535,6 +2603,7 @@ Polyhedron* read_off_into_polyhedron(int* result, FILE* fin)
     }
     return poly;
 }
+
 /**
  * @brief Convert a uint32 to little-endian format
  * @param v The number to convert

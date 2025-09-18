@@ -43,7 +43,7 @@ endif
 CFLAGS ?= -std=c11 -Werror -Wextra -Wall -Wpedantic -fno-strict-aliasing -MMD -MP
 CFLAGS += $(INCLUDES) $(SDL2_CFLAGS) $(MIXER_CFLAGS) $(WIN_DEFS)
 LDFLAGS ?=
-LDLIBS = $(SDL2_LIBS) $(MIXER_LIBS) $(OGL_LIBS)
+LDLIBS = $(SDL2_LIBS) $(MIXER_LIBS) $(OGL_LIBS) -lz
 OBJS := $(SRCS:.c=.o)
 DEPS := $(OBJS:.o=.d)
 .PHONY: all clean run debug release
