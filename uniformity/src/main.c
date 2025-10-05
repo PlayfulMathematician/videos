@@ -1146,11 +1146,7 @@ PDFXref* get_xref(int* result, FILE* f)
     pt.root_obj = root_obj;
     pt.size = size;
     q = strstr(p, "stream");
-    q+=6;
-    if (*q == '\r')
-    {
-        q++;
-    }
+    q+=7;
     long dict_offset_in_buf = (q - buf);
     long file_data_start = offset + dict_offset_in_buf;
     if (fseek(f, file_data_start, SEEK_SET) != 0) 
