@@ -41,9 +41,9 @@
 #include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdint.h>
 #include <ctype.h>
 #include <math.h>
-#include <stdint.h>
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_mixer.h>
 #include <SDL2/SDL_opengl.h>
@@ -53,6 +53,7 @@
 #else
     #include <GL/gl.h>
 #endif
+#define _CRT_SECURE_NO_WARNINGS
 
 /// @def max
 /// @brief The maximizer
@@ -91,8 +92,8 @@
 
 // status code helpers
 #define STATUS_TYPE_SHIFT 24
-#define STATUS_TYPE_MASK  0xFF000000  
-#define STATUS_INFO_MASK  0x00FFFFFF  
+#define STATUS_TYPE_MASK 0xFF000000  
+#define STATUS_INFO_MASK 0x00FFFFFF  
 
 /// @brief Operation succeeded.
 #define SUCCESS 0x00
@@ -850,6 +851,67 @@ typedef struct
     PDFTrailer pt;
 }
 PDFXref;
+
+/**
+ * @brief An object stream index
+ */
+
+typedef struct 
+{
+    /**
+     * @brief The object number 
+     */
+    int obj_num;
+    /**
+     * @brief The offset
+     */
+    int offset;
+} 
+PDFObjStreamIndex;
+
+/**
+ * @brief The object stream
+ */
+
+typedef struct
+{
+    /**
+     * @brief The number of objects stored in this stream (/N).
+     */
+    int count;
+
+    /**
+     * @brief The byte offset in the decompressed stream
+     */
+    int first_offset;
+
+    /**
+     * @brief The length in bytes of the decompressed stream data.
+     */
+    long length;
+
+    /**
+     * @brief Whether the stream was compressed with /FlateDecode.
+     */
+    bool flate;
+
+    /**
+     * @brief Array of object index entries (/N items total).
+     */
+    PDFObjStreamIndex* index;
+
+    /**
+     * @brief The full decompressed stream data.
+     */
+    unsigned char* data;
+
+    /**
+     * @brief The total length of @ref data.
+     */
+    size_t data_len;
+}
+PDFObjStream;
+
 
 /**
  * @brief This reads big endian
