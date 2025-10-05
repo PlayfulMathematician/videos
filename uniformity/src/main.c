@@ -53,6 +53,7 @@
 #else
     #include <GL/gl.h>
 #endif
+
 /// @def max
 /// @brief The maximizer
 #ifndef max
@@ -70,14 +71,16 @@
 
 /// @def BUFFER_SIZE
 /// @brief The size of a buffer
-#define BUFFER_SIZE 1024
+#define BUFFER_SIZE 4096
 
 /// @def BIT_IGNORE
 /// @brief Alignment granularity in bits (round up to 2^BIT_IGNORE).
 #define BIT_IGNORE 4
+
 /// @def BIT_SIZE
 /// @brief 2 ^ BIT_IGNORE - 1
 #define BIT_SIZE ((1 << BIT_IGNORE) - 1)
+
 /// @def BIT_ALIGN(x)
 /// @brief Round x up to nearest aligned multiple.
 #define BIT_ALIGN(x) max(((x) + BIT_SIZE) & ~BIT_SIZE,1)
@@ -93,10 +96,13 @@
 
 /// @brief Operation succeeded.
 #define SUCCESS 0x00
+
 /// @brief No operation performed.
 #define NOOP 0x01
+
 /// @brief Non-fatal error.
 #define NONFATAL 0x02
+
 /// @brief Fatal error.
 #define FATAL 0x03
 
@@ -145,6 +151,20 @@
 #define PDF_XREF_FIND_SEEK_SET_ERROR 0x03000023 ///< When trying to find the xref table in a pdf, fseek failed to set the seek
 #define PDF_XREF_STARTXREF_NOT_FOUND 0x03000024 ///< When trying to find the xref table in a pdf, the string startxref was not found
 #define PDF_XREF_OFFSET_PARSE_ERROR 0x03000025 ///< When trying to find the xref table in the pdf the offset could not be properly parsed.
+#define PDF_XREF_FIND_FREAD_ERROR 0x03000026 ///< When trying to find the xref table in a pdf, fread failed
+#define NEXT_STR_NOT_FOUND_ERROR 0x03000027 ///< When using next_str, the character "\0" was not found 
+#define GET_XREF_FSEEK_ERROR 0x03000028 ///< When getting the xref, fseek failed
+#define GET_XREF_FREAD_ERROR 0x03000029 ///< When getting the xref, fread failed.
+#define GET_XREF_STRCHR_NEWLINE_FAIL 0x0300002a ///< When getting xref, strchr to look at new line failed.
+#define NON_XREF_XREF 0x0300002b ///< The type of the xref table is not an xref
+#define GET_XREF_STREAM_SEEK_ERROR 0x0300002c ///< When getting the xref seeking the stream failed
+#define STREAM_DECOMPRESS_MALLOC_FAIL 0x0300002d ///< Allocating memory for decompressed stream failed
+#define STREAM_DECOMPRESS_INIT_FAIL 0x0300002e ///< Initializing the stream decompression failed
+#define STREAM_DECOMPRESS_FAIL 0x0300002f ///< Decompressing streams failed
+#define GET_XREF_STREAM_MALLOC_ERROR 0x03000030 ///< When getting the xref allocating memory to store the stream failed
+#define GET_XREF_STREAM_READ_ERROR 0x03000031 ///< Reading the file to store the xref stream failed
+#define GET_XREF_MALLOC_ERROR 0x03000032 ///< When getting the xref, allocating the PDFXref object failed
+#define GET_XREF_TABLE_ENTRIES_MALLOC_ERROR 0x03000033 ///< When getting the xref table entries, malloc failed
 
 #ifdef _WIN32
   #define POPEN  _popen
@@ -316,7 +336,49 @@ void print_error(int error)
             fprintf(stderr, "When trying to find the xref table in a pdf, the string startxref was not found\n");
             break;
         case PDF_XREF_OFFSET_PARSE_ERROR:
-            fprintf(stderr, "When trying to find the xref table in the pdf the offset could not be properly parsed.\n")
+            fprintf(stderr, "When trying to find the xref table in the pdf the offset could not be properly parsed.\n");
+            break;
+        case PDF_XREF_FIND_FREAD_ERROR:
+            fprintf(stderr, "When trying to find the xref table in a pdf, fread failed\n");
+            break;
+        case NEXT_STR_NOT_FOUND_ERROR:
+            fprintf(stderr, "When using next_str, the character \"\\0\" was not found \n");
+            break;
+        case GET_XREF_FSEEK_ERROR:
+            fprintf(stderr, "When getting the xref, fseek failed\n");
+            break;
+        case GET_XREF_FREAD_ERROR:
+            fprintf(stderr, "When getting the xref, fread failed.\n");
+            break;
+        case GET_XREF_STRCHR_NEWLINE_FAIL:
+            fprintf(stderr, "When getting xref, strchr to look at new line failed.\n");
+            break;
+        case NON_XREF_XREF:
+            fprintf(stderr, "The type of the xref table is not an xref\n");
+            break;
+        case GET_XREF_STREAM_SEEK_ERROR:
+            fprintf(stderr, "When getting the xref seeking the stream failed\n");
+            break;
+        case STREAM_DECOMPRESS_MALLOC_FAIL:
+            fprintf(stderr, "Allocating memory for decompressed stream failed\n");
+            break;
+        case STREAM_DECOMPRESS_INIT_FAIL:
+            fprintf(stderr, "Initializing the stream decompression failed\n");
+            break;
+        case STREAM_DECOMPRESS_FAIL:
+            fprintf(stderr, "Decompressing streams failed\n");
+            break;
+        case GET_XREF_STREAM_MALLOC_ERROR:
+            fprintf(stderr, "When getting the xref allocating memory to store the stream failed\n");
+            break;
+        case GET_XREF_STREAM_READ_ERROR:
+            fprintf(stderr, "Reading the file to store the xref stream failed\n");
+            break;
+        case GET_XREF_MALLOC_ERROR:
+            fprintf(stderr, "When getting the xref, allocating the PDFXref object failed\n");
+            break;
+        case GET_XREF_TABLE_ENTRIES_MALLOC_ERROR:
+            fprintf(stderr, "When getting the xref table entries, malloc failed\n");
             break;
         default:
             fprintf(stderr, "SOMETHING BAD HAPPENED, WE DON'T KNOW WHAT");
@@ -714,6 +776,159 @@ struct GlobalBuffer
 };
 
 /**
+ * @brief One cross-reference entry.
+ */
+
+typedef struct 
+{
+    /**
+     * @brief The type of the entry (0 = free, 1 = in-use, 2 = compressed)
+     */
+    int type;       
+    /**
+     * @brief The file offset/object stream number
+     */
+    long offset;    
+    /**
+     * @brief Generation number or index inside stream
+     */
+    int generation; 
+} 
+PDFXrefEntry;
+
+/**
+ * @brief The full cross-reference table.
+ */
+
+typedef struct 
+{
+    /**
+     * @brief The size of the Xref table
+     */
+    int size;              
+    /**
+     * @brief The actual entries of the table
+     */
+    PDFXrefEntry* entries; 
+} 
+PDFXrefTable;
+
+/**
+ * @brief The trailer info
+ */
+
+typedef struct 
+{
+    /**
+     * @brief The size of the table
+     */
+    int size;  
+    /**
+     * @brief Index of root object
+     */
+    int root_obj;   
+    /**
+     * @brief The generation of the root object
+     */
+    int root_gen;    
+} 
+PDFTrailer;
+
+/**
+ * @brief The PDF Xref
+ */
+
+typedef struct 
+{
+    /**
+     * @brief The table
+     */
+    PDFXrefTable tb;
+    /**
+     * @brief The trailer
+     */
+    PDFTrailer pt;
+}
+PDFXref;
+
+/**
+ * @brief This reads big endian
+ * @param p The raw binary data
+ * @param width the size of the big endian int to parse
+ * @return The big endian integer (as a long)
+ */
+
+long read_be_int(const unsigned char* p, int width) 
+{
+    long val = 0;
+    for (int i = 0; i < width; i++) 
+    {
+        val = (val << 8) | p[i];
+    }
+    return val;
+}
+
+/**
+ * @brief This decompresses a flate stream
+ * @param[out] result The result
+ * @param input The stream to be decompressed
+ * @param input_len The size of the stream
+ * @param[out] output_len The size of the decompressed
+ * @return The decompressed stream
+ */
+
+unsigned char* decompress_flate(int* result, unsigned char* input, size_t input_len, size_t* output_len)
+{
+    size_t buf_size = input_len * 8; 
+    unsigned char* output = malloc(buf_size);
+    if (!output) 
+    {
+        *result = STREAM_DECOMPRESS_MALLOC_FAIL;
+        return null;
+    }
+    z_stream strm = {0};
+    strm.next_in = input;
+    strm.avail_in = input_len;
+    strm.next_out = output;
+    strm.avail_out = buf_size;
+    if (inflateInit(&strm) != Z_OK) 
+    {
+        free(output);
+        *result = STREAM_DECOMPRESS_INIT_FAIL;
+        return null;
+    }
+    int ret = inflate(&strm, Z_FINISH);
+    if (ret != Z_STREAM_END) 
+    {
+        inflateEnd(&strm);
+        free(output);
+        *result = STREAM_DECOMPRESS_FAIL;
+        return null;
+    }
+    *output_len = strm.total_out;
+    inflateEnd(&strm);
+    *result = SUCCESS;
+    return output;
+}
+
+/**
+ * @brief This generates the next string in a series of strings seperated by \0
+ * @param[out] result Win/Lose
+ * @param c The start of the string
+ * @return A pointer to the next string
+ */
+
+unsigned char* next_str(int* result, unsigned char* c)
+{
+    for (int32_t i = 0;*(c++)&&((i++-BUFFER_SIZE)>>31);)
+    {
+        // Sorry
+    }
+    *result = *(c - 1) ? NEXT_STR_NOT_FOUND_ERROR : SUCCESS;
+    return *(c - 1) ? null : c;
+}
+
+/**
  * @brief This grabs the location of the xref table in a PDF file
  * @param[out] result The success/failing
  * @param f The PDF file
@@ -740,10 +955,23 @@ long findxref(int* result, FILE* f)
         *result = PDF_XREF_FIND_SEEK_SET_ERROR;
         return -1;
     }
-    size_t n = fread(buf, 1, BUFFER_SIZE, f);
+    size_t n = fread(buf, sizeof(char), BUFFER_SIZE, f);
+    if (n == 0 && ferror(f))
+    {
+        *result = PDF_XREF_FIND_FREAD_ERROR;
+        return -1;
+    }
     buf[n] = '\0';
+    /* This keeps is because files tend to randomly have a lot of '\0', we get rid of them */
+    for (size_t i = 0; i < n; i++)
+    {
+        if (buf[i] == '\0')
+        {
+             buf[i] = 1; 
+        }
+    }
     char *pos = strstr(buf, "startxref");
-    if (!pos) 
+    if (!pos)
     {
         *result = PDF_XREF_STARTXREF_NOT_FOUND;
         return -1;
@@ -759,41 +987,202 @@ long findxref(int* result, FILE* f)
     return offset;
 }
 
-PFNGLCREATESHADERPROC pglCreateShader;
-PFNGLSHADERSOURCEPROC pglShaderSource;
-PFNGLCOMPILESHADERPROC pglCompileShader;
-PFNGLGETSHADERIVPROC pglGetShaderiv;
-PFNGLGETSHADERINFOLOGPROC pglGetShaderInfoLog;
-PFNGLCREATEPROGRAMPROC pglCreateProgram;
-PFNGLATTACHSHADERPROC pglAttachShader;
-PFNGLLINKPROGRAMPROC pglLinkProgram;
-PFNGLGETPROGRAMIVPROC pglGetProgramiv;
-PFNGLGETPROGRAMINFOLOGPROC pglGetProgramInfoLog;
-PFNGLUSEPROGRAMPROC pglUseProgram;
-PFNGLGETUNIFORMLOCATIONPROC pglGetUniformLocation;
-PFNGLUNIFORM1FPROC pglUniform1f;
-PFNGLUNIFORM3FPROC pglUniform3f;
-PFNGLDETACHSHADERPROC pglDetachShader;
-PFNGLDELETESHADERPROC pglDeleteShader;
-PFNGLDELETEPROGRAMPROC pglDeleteProgram;
-PFNGLUNIFORM1IPROC pglUniform1i;
-PFNGLUNIFORM2FPROC pglUniform2f;
-PFNGLUNIFORM4FPROC pglUniform4f;
-PFNGLUNIFORM1FVPROC pglUniform1fv;
-PFNGLUNIFORM3FVPROC pglUniform3fv;
-PFNGLUNIFORMMATRIX4FVPROC pglUniformMatrix4fv;
-PFNGLGETATTRIBLOCATIONPROC pglGetAttribLocation;
-PFNGLENABLEVERTEXATTRIBARRAYPROC pglEnableVertexAttribArray;
+/**
+ * @brief Tests find xref
+ * @param[out] result The result
+ * @return nothing
+ */
+
+void test_findxref(int* result)
+{
+    FILE* f = fopen("8.pdf", "rb");
+    if(!f)
+    {
+        fprintf(stderr, "I am sorry :(\n");
+        return;
+    }
+    long offset = findxref(result, f);
+    if(IS_AN_ERROR(*result))
+    {
+        print_error(*result);
+        return;
+    }
+    fseek(f, offset, SEEK_SET);
+    char a[2000];
+    fread(a, sizeof(char), 2000, f);
+    fwrite(a, sizeof(char), 2000, stdout);
+    fclose(f);
+}
+
+/**
+ * @brief This gets the xref 
+ * @param[out] result
+ * @param f File
+ * @return the xref
+ */
+
+PDFXref* get_xref(int* result, FILE* f)
+{
+    long offset = findxref(result, f);
+    if (IS_AN_ERROR(*result))
+    {
+        return null;
+    }
+    char buf[BUFFER_SIZE];
+    if(fseek(f, offset, SEEK_SET) != 0)
+    {
+        *result = GET_XREF_FSEEK_ERROR;
+        return null;
+    }
+    size_t n = fread(buf, sizeof(char), BUFFER_SIZE, f);
+    if (n == 0 && ferror(f))
+    {
+        *result = GET_XREF_FREAD_ERROR;
+        return null;
+    }
+    buf[n] = '\0';
+    char* p = buf;
+
+    p = strchr(p, '\n');
+    if (!p) {
+        *result = GET_XREF_STRCHR_NEWLINE_FAIL;
+        return null;
+    }
+    p++; 
+    p = strchr(p, '\n');
+    if (!p) {
+        *result = GET_XREF_STRCHR_NEWLINE_FAIL;
+        return null;
+    }
+    p++; 
+    char* q;
+    int size = 0;
+    int w0 = 0;
+    int w1 = 0; 
+    int w2 = 0;
+    long length = 0;
+    int root_obj = 0;
+    int root_gen = 0;
+    if ((q = strstr(p, "/Size")))  
+    {
+        sscanf(q, "/Size %d", &size);
+    }
+    if ((q = strstr(p, "/Length")))
+    {
+        sscanf(q, "/Length %ld", &length);
+    }
+    if ((q = strstr(p, "/W")))     
+    {
+        sscanf(q, "/W [%d %d %d]", &w0, &w1, &w2);
+    }
+    if ((q = strstr(p, "/Root")))  
+    {
+        sscanf(q, "/Root %d %d R", &root_obj, &root_gen);
+    }
+    PDFTrailer pt;
+    pt.root_gen = root_gen;
+    pt.root_obj = root_obj;
+    pt.size = size;
+    q = strstr(p, "stream");
+    q+=6;
+    if (*q == '\r')
+    {
+        q++;
+    }
+    long dict_offset_in_buf = (q - buf);
+    long file_data_start = offset + dict_offset_in_buf;
+    if (fseek(f, file_data_start, SEEK_SET) != 0) 
+    {
+        *result = GET_XREF_STREAM_SEEK_ERROR;
+        return null;
+    }
+    unsigned char *raw = malloc(length);
+    if (!raw) 
+    {
+        *result = GET_XREF_STREAM_MALLOC_ERROR;
+        return null;
+    }
+    size_t read_bytes = fread(raw, 1, length, f);
+    if (read_bytes != (size_t)length) 
+    {
+        *result = GET_XREF_STREAM_READ_ERROR;
+        free(raw);
+        return null;
+    }
+    size_t decomp_len = 0;
+    unsigned char* decomp = decompress_flate(result, raw, length, &decomp_len);
+    free(raw);
+
+    if (IS_AN_ERROR(*result)) {
+        return null;
+    }
+
+    PDFXref* xref = malloc(sizeof(PDFXref));
+    if (!xref) 
+    {
+        *result = GET_XREF_MALLOC_ERROR;
+        free(decomp);
+        return null;
+    }
+    xref->pt = pt;
+    xref->tb.size = size;
+    xref->tb.entries = calloc(size, sizeof(PDFXrefEntry));
+    if (!xref->tb.entries) 
+    {
+        *result = GET_XREF_TABLE_ENTRIES_MALLOC_ERROR;
+        free(decomp);
+        free(xref);
+        return null;
+    }
+    int entry_size = w0 + w1 + w2;
+    for (int i = 0; i < size; i++) 
+    {
+        unsigned char* rec = decomp + i * entry_size;
+        xref->tb.entries[i].type = read_be_int(rec, w0);
+        xref->tb.entries[i].offset = read_be_int(rec + w0, w1);
+        xref->tb.entries[i].generation = read_be_int(rec + w0 + w1, w2);
+    }
+    free(decomp);
+
+    *result = SUCCESS;
+    return xref;
+}
+
+PFNGLUNIFORM1IPROC                pglUniform1i;
+PFNGLUNIFORM1FPROC                pglUniform1f;
+PFNGLUNIFORM3FPROC                pglUniform3f;
+PFNGLUNIFORM2FPROC                pglUniform2f;
+PFNGLUNIFORM4FPROC                pglUniform4f;
+PFNGLUNIFORM1FVPROC               pglUniform1fv;
+PFNGLUSEPROGRAMPROC               pglUseProgram;
+PFNGLUNIFORM3FVPROC               pglUniform3fv;
+PFNGLBINDBUFFERPROC               pglBindBuffer;
+PFNGLGENBUFFERSPROC               pglGenBuffers;
+PFNGLBUFFERDATAPROC               pglBufferData;
+PFNGLGETSHADERIVPROC              pglGetShaderiv;
+PFNGLLINKPROGRAMPROC              pglLinkProgram;
+PFNGLCREATESHADERPROC             pglCreateShader;
+PFNGLSHADERSOURCEPROC             pglShaderSource;
+PFNGLATTACHSHADERPROC             pglAttachShader;
+PFNGLGETPROGRAMIVPROC             pglGetProgramiv;
+PFNGLDELETESHADERPROC             pglDeleteShader;
+PFNGLDETACHSHADERPROC             pglDetachShader;
+PFNGLCOMPILESHADERPROC            pglCompileShader;
+PFNGLCREATEPROGRAMPROC            pglCreateProgram;
+PFNGLDELETEPROGRAMPROC            pglDeleteProgram;
+PFNGLDELETEBUFFERSPROC            pglDeleteBuffers;
+PFNGLGENVERTEXARRAYSPROC          pglGenVertexArrays;
+PFNGLBINDVERTEXARRAYPROC          pglBindVertexArray;
+PFNGLVALIDATEPROGRAMPROC          pglValidateProgram;
+PFNGLUNIFORMMATRIX4FVPROC         pglUniformMatrix4fv;
+PFNGLGETSHADERINFOLOGPROC         pglGetShaderInfoLog;
+PFNGLGETPROGRAMINFOLOGPROC        pglGetProgramInfoLog;
+PFNGLGETATTRIBLOCATIONPROC        pglGetAttribLocation;
+PFNGLGETUNIFORMLOCATIONPROC       pglGetUniformLocation;
+PFNGLDELETEVERTEXARRAYSPROC       pglDeleteVertexArrays;
+PFNGLVERTEXATTRIBPOINTERPROC      pglVertexAttribPointer;
+PFNGLENABLEVERTEXATTRIBARRAYPROC  pglEnableVertexAttribArray;
 PFNGLDISABLEVERTEXATTRIBARRAYPROC pglDisableVertexAttribArray;
-PFNGLVERTEXATTRIBPOINTERPROC pglVertexAttribPointer;
-PFNGLGENBUFFERSPROC pglGenBuffers;
-PFNGLBINDBUFFERPROC pglBindBuffer;
-PFNGLBUFFERDATAPROC pglBufferData;
-PFNGLDELETEBUFFERSPROC pglDeleteBuffers;
-PFNGLGENVERTEXARRAYSPROC pglGenVertexArrays;
-PFNGLBINDVERTEXARRAYPROC pglBindVertexArray;
-PFNGLDELETEVERTEXARRAYSPROC pglDeleteVertexArrays;
-PFNGLVALIDATEPROGRAMPROC pglValidateProgram;
 
 #define LOAD_GL(type, var, name) do {var = (type)(uintptr_t)SDL_GL_GetProcAddress(name);  if (!var) {*result = LOAD_OPENGL_FUNCTION_ERROR; return; } } while(0)
 
@@ -805,42 +1194,41 @@ PFNGLVALIDATEPROGRAMPROC pglValidateProgram;
 
 void load_gl_shader_functions(int* result)
 {
-    LOAD_GL(PFNGLCREATESHADERPROC, pglCreateShader, "glCreateShader");
-    LOAD_GL(PFNGLSHADERSOURCEPROC, pglShaderSource, "glShaderSource");
-    LOAD_GL(PFNGLCOMPILESHADERPROC, pglCompileShader, "glCompileShader");
-    LOAD_GL(PFNGLGETSHADERIVPROC, pglGetShaderiv, "glGetShaderiv");
-    LOAD_GL(PFNGLGETSHADERINFOLOGPROC, pglGetShaderInfoLog, "glGetShaderInfoLog");
-    LOAD_GL(PFNGLCREATEPROGRAMPROC, pglCreateProgram, "glCreateProgram");
-    LOAD_GL(PFNGLATTACHSHADERPROC, pglAttachShader, "glAttachShader");
-    LOAD_GL(PFNGLLINKPROGRAMPROC, pglLinkProgram, "glLinkProgram");
-    LOAD_GL(PFNGLGETPROGRAMIVPROC, pglGetProgramiv, "glGetProgramiv");
-    LOAD_GL(PFNGLGETPROGRAMINFOLOGPROC, pglGetProgramInfoLog, "glGetProgramInfoLog");
-    LOAD_GL(PFNGLUSEPROGRAMPROC, pglUseProgram, "glUseProgram");
-    LOAD_GL(PFNGLGETUNIFORMLOCATIONPROC, pglGetUniformLocation, "glGetUniformLocation");
-    LOAD_GL(PFNGLUNIFORM1FPROC, pglUniform1f, "glUniform1f");
-    LOAD_GL(PFNGLUNIFORM3FPROC, pglUniform3f, "glUniform3f");
-    LOAD_GL(PFNGLDETACHSHADERPROC, pglDetachShader, "glDetachShader");
-    LOAD_GL(PFNGLDELETESHADERPROC, pglDeleteShader, "glDeleteShader");
-    LOAD_GL(PFNGLDELETEPROGRAMPROC, pglDeleteProgram, "glDeleteProgram");
-    LOAD_GL(PFNGLUNIFORM1IPROC, pglUniform1i, "glUniform1i");
-    LOAD_GL(PFNGLUNIFORM2FPROC, pglUniform2f, "glUniform2f");
-    LOAD_GL(PFNGLUNIFORM4FPROC, pglUniform4f, "glUniform4f");
-    LOAD_GL(PFNGLUNIFORM1FVPROC, pglUniform1fv, "glUniform1fv");
-    LOAD_GL(PFNGLUNIFORM3FVPROC, pglUniform3fv, "glUniform3fv");
-    LOAD_GL(PFNGLUNIFORMMATRIX4FVPROC, pglUniformMatrix4fv, "glUniformMatrix4fv");
-    LOAD_GL(PFNGLGETATTRIBLOCATIONPROC, pglGetAttribLocation, "glGetAttribLocation");
-    LOAD_GL(PFNGLENABLEVERTEXATTRIBARRAYPROC, pglEnableVertexAttribArray, "glEnableVertexAttribArray");
+    LOAD_GL(PFNGLUNIFORM1FPROC,                pglUniform1f,                "glUniform1f");
+    LOAD_GL(PFNGLUNIFORM3FPROC,                pglUniform3f,                "glUniform3f");
+    LOAD_GL(PFNGLUNIFORM1IPROC,                pglUniform1i,                "glUniform1i");
+    LOAD_GL(PFNGLUNIFORM2FPROC,                pglUniform2f,                "glUniform2f");
+    LOAD_GL(PFNGLUNIFORM4FPROC,                pglUniform4f,                "glUniform4f");
+    LOAD_GL(PFNGLGENBUFFERSPROC,               pglGenBuffers,               "glGenBuffers");
+    LOAD_GL(PFNGLUSEPROGRAMPROC,               pglUseProgram,               "glUseProgram");
+    LOAD_GL(PFNGLUNIFORM1FVPROC,               pglUniform1fv,               "glUniform1fv");
+    LOAD_GL(PFNGLUNIFORM3FVPROC,               pglUniform3fv,               "glUniform3fv");
+    LOAD_GL(PFNGLBINDBUFFERPROC,               pglBindBuffer,               "glBindBuffer");
+    LOAD_GL(PFNGLBUFFERDATAPROC,               pglBufferData,               "glBufferData");
+    LOAD_GL(PFNGLGETSHADERIVPROC,              pglGetShaderiv,              "glGetShaderiv");
+    LOAD_GL(PFNGLLINKPROGRAMPROC,              pglLinkProgram,              "glLinkProgram");
+    LOAD_GL(PFNGLCREATESHADERPROC,             pglCreateShader,             "glCreateShader");
+    LOAD_GL(PFNGLSHADERSOURCEPROC,             pglShaderSource,             "glShaderSource");
+    LOAD_GL(PFNGLATTACHSHADERPROC,             pglAttachShader,             "glAttachShader");
+    LOAD_GL(PFNGLGETPROGRAMIVPROC,             pglGetProgramiv,             "glGetProgramiv");
+    LOAD_GL(PFNGLDETACHSHADERPROC,             pglDetachShader,             "glDetachShader");
+    LOAD_GL(PFNGLDELETESHADERPROC,             pglDeleteShader,             "glDeleteShader");
+    LOAD_GL(PFNGLDELETEBUFFERSPROC,            pglDeleteBuffers,            "glDeleteBuffers");
+    LOAD_GL(PFNGLCOMPILESHADERPROC,            pglCompileShader,            "glCompileShader");
+    LOAD_GL(PFNGLDELETEPROGRAMPROC,            pglDeleteProgram,            "glDeleteProgram");
+    LOAD_GL(PFNGLCREATEPROGRAMPROC,            pglCreateProgram,            "glCreateProgram");
+    LOAD_GL(PFNGLVALIDATEPROGRAMPROC,          pglValidateProgram,          "glValidateProgram");
+    LOAD_GL(PFNGLBINDVERTEXARRAYPROC,          pglBindVertexArray,          "glBindVertexArray");
+    LOAD_GL(PFNGLGENVERTEXARRAYSPROC,          pglGenVertexArrays,          "glGenVertexArrays");
+    LOAD_GL(PFNGLUNIFORMMATRIX4FVPROC,         pglUniformMatrix4fv,         "glUniformMatrix4fv");
+    LOAD_GL(PFNGLGETSHADERINFOLOGPROC,         pglGetShaderInfoLog,         "glGetShaderInfoLog");
+    LOAD_GL(PFNGLGETATTRIBLOCATIONPROC,        pglGetAttribLocation,        "glGetAttribLocation");
+    LOAD_GL(PFNGLGETPROGRAMINFOLOGPROC,        pglGetProgramInfoLog,        "glGetProgramInfoLog");
+    LOAD_GL(PFNGLGETUNIFORMLOCATIONPROC,       pglGetUniformLocation,       "glGetUniformLocation");
+    LOAD_GL(PFNGLDELETEVERTEXARRAYSPROC,       pglDeleteVertexArrays,       "glDeleteVertexArrays");
+    LOAD_GL(PFNGLVERTEXATTRIBPOINTERPROC,      pglVertexAttribPointer,      "glVertexAttribPointer");
+    LOAD_GL(PFNGLENABLEVERTEXATTRIBARRAYPROC,  pglEnableVertexAttribArray,  "glEnableVertexAttribArray");
     LOAD_GL(PFNGLDISABLEVERTEXATTRIBARRAYPROC, pglDisableVertexAttribArray, "glDisableVertexAttribArray");
-    LOAD_GL(PFNGLVERTEXATTRIBPOINTERPROC, pglVertexAttribPointer, "glVertexAttribPointer");
-    LOAD_GL(PFNGLGENBUFFERSPROC, pglGenBuffers, "glGenBuffers");
-    LOAD_GL(PFNGLBINDBUFFERPROC, pglBindBuffer, "glBindBuffer");
-    LOAD_GL(PFNGLBUFFERDATAPROC, pglBufferData, "glBufferData");
-    LOAD_GL(PFNGLDELETEBUFFERSPROC, pglDeleteBuffers, "glDeleteBuffers");
-    LOAD_GL(PFNGLGENVERTEXARRAYSPROC, pglGenVertexArrays, "glGenVertexArrays");
-    LOAD_GL(PFNGLBINDVERTEXARRAYPROC, pglBindVertexArray, "glBindVertexArray");
-    LOAD_GL(PFNGLDELETEVERTEXARRAYSPROC, pglDeleteVertexArrays, "glDeleteVertexArrays");
-    LOAD_GL(PFNGLVALIDATEPROGRAMPROC, pglValidateProgram, "glValidateProgram");
-
     *result = SUCCESS;
 }
 
@@ -880,7 +1268,15 @@ GLuint compile_shader(int* result, const char* src, GLenum type)
 GLuint create_shader_program(int* result, const char* vs_src, const char* fs_src) 
 {
     GLuint vs = compile_shader(result, vs_src, GL_VERTEX_SHADER);
+    if (IS_AN_ERROR(*result))
+    {
+        return 0;
+    }
     GLuint fs = compile_shader(result, fs_src, GL_FRAGMENT_SHADER);
+    if (IS_AN_ERROR(*result))
+    {
+        return 0;
+    }
     GLuint prog = pglCreateProgram();
     pglAttachShader(prog, vs);
     pglAttachShader(prog, fs);
@@ -2816,7 +3212,6 @@ void draw_triangulation(int* result, GLuint prog, Triangulation* tri)
 }
 
 
-
 /**
  * @brief the main function lol
  * @param argc lol
@@ -2826,6 +3221,10 @@ void draw_triangulation(int* result, GLuint prog, Triangulation* tri)
 
 int main(int argc, char *argv[]) 
 {
+    int j = SUCCESS;
+    test_findxref(&j);
+    return 0;
+
     if (argc != 2)
     {
         fprintf(stderr, "I wish for two parameters!");
