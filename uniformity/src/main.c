@@ -37,6 +37,7 @@
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
+/* The standard libraries */
 #include <stdio.h>
 #include <stdbool.h>
 #include <stdlib.h>
@@ -44,17 +45,24 @@
 #include <stdint.h>
 #include <ctype.h>
 #include <math.h>
+/* The SDL2 Libraries */
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_mixer.h>
 #include <SDL2/SDL_opengl.h>
+/* Compression Algorithms */
 #include <zlib.h>
+/* Use OpenGL */
 #ifdef __APPLE__
     #include <OpenGL/gl.h>
 #else
     #include <GL/gl.h>
 #endif
-#define _CRT_SECURE_NO_WARNINGS
-
+/// @def Dumpster
+/// @brief This stores anything
+typedef void* Dumpster;
+/// @def CanimResult
+/// @brief Stores the result of some event occuring
+typedef uint32_t CanimResult;
 /// @def max
 /// @brief The maximizer
 #ifndef max
@@ -67,8 +75,8 @@
 
 /// @def null
 /// @brief I do not want to capitalize NULL
-#define null ((void*)0)
-#undef NULL
+#define null NULL
+
 
 /// @def BUFFER_SIZE
 /// @brief The size of a buffer
@@ -217,7 +225,7 @@ const char* triangulation_fs =
  * @return I will not return anything 
 */
 
-void print_error(int error)
+void print_error(CanimResult error)
 {
     if (!IS_AN_ERROR(error))
     {
@@ -409,72 +417,137 @@ typedef struct
 Vec3;
 
 /**
+ * @brief The color
+ */
+
+typedef union 
+{
+    /**
+     * @brief The Color BYTE Packed
+     */
+    uint32_t rgba; 
+    /**
+     * @brief The color as a list, eg. v[1] is green component
+     */
+    uint8_t v[4];
+    /**
+     * @brief The color is a struct
+     */
+    struct
+    {
+        /**
+         * @brief The red component
+         */
+        uint8_t r;
+        /**
+         * @brief The green component
+         */
+        uint8_t g;
+        /**
+         * @brief The Blue Component
+         */
+        uint8_t b;
+        /**
+         * @brief The Alpha component
+         */
+        uint8_t a;
+    };
+}
+Color;
+
+
+/**
  * @brief The face data 
  */
 
 typedef struct 
 {
-
     /**
      * @brief The color
      */
-
-    union 
-    {
-
-        /**
-         * @brief This is the actual RGBA components
-         */
-
-        struct 
-        {
-
-            /**
-             * @brief The red component
-             */
-
-            uint8_t r;
-
-            /**
-             * @brief The Green Component
-             */
-
-            uint8_t g;
-
-            /**
-             * @brief The blue component
-             */
-
-            uint8_t b;
-
-            /**
-             * @brief The Alpha Channel (transparency)
-             */
-
-            uint8_t a;   
-        };
-
-        /**
-         * @brief The colors byte packed (RRGGBBAA)
-         */
-
-        uint32_t rgba; 
-
-        /**
-         * @brief The components (list)
-         */
-
-        uint8_t v[4]; 
-    } 
-    color;
-
+    Color color;
     /**
      * The normal of the face (normalized)
      */
-
     Vec3 normal;
 } 
 FaceData;
+
+/**
+ * @brief A triangle (raw, not references to index)
+ */
+
+typedef struct
+{
+    /**
+     * @brief The vertices
+     */
+    Vec3 vertices[3];
+    /** 
+     * @brief The FaceData
+     */
+    FaceData fd; 
+}
+TriangleRaw;
+
+/**
+ * @brief A triangle but with references to indices
+ */
+
+typedef struct
+{
+    /**
+     * @brief The vertices as indices
+     */
+    int vertices[3];
+    /**
+     * @brief The FaceData
+     */
+    FaceData fd; 
+}
+TriangleIndexed;
+
+/**
+ * @brief A raw polygon (not indexed)
+ */
+
+typedef struct
+{
+    /**
+     * @brief The number of vertices
+     */
+    int vertex_count;
+    /**
+     * @brief The vertices
+     */
+    Vec3* vertices;
+    /**
+     * @brief The facedata
+     */
+    FaceData fd;
+}
+PolygonRaw;
+
+/**
+ * @brief An indexed polygon
+ */
+
+typedef struct
+{
+    /**
+     * @brief The number of vertices
+     */
+    int vertex_count;
+    /**
+     * @brief The vertices
+     */
+    int* vertices;
+    /**
+     * @brief The facedata
+     */
+    FaceData fd;
+}
+PolygonIndexed;
 
 /**
  * @brief A polyhedron object. To serialize polyhedra.
@@ -497,15 +570,7 @@ typedef struct
     /** 
      * @brief The faces (stored as indices of the vertices) 
      * */
-    int** faces;
-    /** 
-     * @brief The sizes of each face 
-     * */
-    int* face_sizes;
-    /**
-     * @brief face data
-     */
-    FaceData* fd;
+    PolygonIndexed* poly;
 } 
 Polyhedron;
 
@@ -531,6 +596,10 @@ typedef struct
      *  @brief The number of edges
      *  */
     int edge_count;
+    /**
+     * @brief The old face
+     */
+    PolygonRaw poly;
 } 
 PSLG;
 
@@ -543,17 +612,11 @@ typedef struct
     /**
      *  @brief The triangles
      *  */
-    Vec3 (*triangles)[3];
+    TriangleRaw* triangles;
     /**
      *  @brief The number of triangles
      *  */
     int triangle_count;
-    /**
-     * @brief Pointer to specific face data
-     */
-    FaceData* fd;
-    
-    
 }
 Triangulation;
 
@@ -606,23 +669,6 @@ typedef struct
 }
 PSLGTriangulation;
 
-/**
- * @brief This stores basically anything. 
- */
-
-typedef struct
-{
-    /**
-     * @brief This stores all of the data
-     */
-    void* data;
-    /**
-    * @brief How big is the dumpster;
-    */
-    int dumpster_size;
-}
-Dumpster;
-
 typedef struct Animation Animation;
 typedef struct GlobalBuffer GlobalBuffer;
 typedef struct VideoData VideoData;  
@@ -646,23 +692,23 @@ struct Animation
     /**
      * @brief The construction function to be run on animation start
      */
-    void (*construct)(int* result, struct Animation*);
+    void (*construct)(CanimResult*, struct Animation*);
     /**
      * @brief The function run before a frame is rendered.
      */
-    void (*preproc)(int* result, struct Animation*, int t);
+    void (*preproc)(CanimResult*, struct Animation*, int);
     /**
      * @brief The function run for rendering
      */
-    void (*render)(int* result, struct Animation*, int t);
+    void (*render)(CanimResult*, struct Animation*, int);
     /**
      * @brief The post processing function
      */
-    void (*postproc)(int* result, struct Animation*, int t);
+    void (*postproc)(CanimResult*, struct Animation*, int);
     /**
      * @brief The free function 
      * */
-    void (*free)(int* result, struct Animation*);
+    void (*free)(CanimResult*, struct Animation*);
     /**
      * @brief Put data here
      */
@@ -697,11 +743,6 @@ struct AnimationSection
      */
     int end_t;
     /**
-     * @brief Why is this here!?!
-     * @remark Consider removing
-     */
-    void (*init)(int* result, struct AnimationSection*);
-    /**
      * @brief A pointer an object that has a pointer to this object. 
      */
     VideoData* vd;
@@ -714,13 +755,13 @@ struct AnimationSection
 struct VideoData
 {
     /**
-     * @brief The animation sections
+     * @brief The animations
      */
-    AnimationSection* animation_section;
+    Animation* Animation;
     /**
-     * @brief The number of sections
+     * @brief The number of animations
      */
-    int section_count;
+    int animation_count;
     /**
      * @brief Backreference to Global Buffer
      */
@@ -939,7 +980,7 @@ long read_be_int(const unsigned char* p, int width)
  * @return The decompressed stream
  */
 
-unsigned char* decompress_flate(int* result, unsigned char* input, size_t input_len, size_t* output_len)
+unsigned char* decompress_flate(CanimResult* result, unsigned char* input, size_t input_len, size_t* output_len)
 {
     size_t buf_size = input_len * 8; 
     unsigned char* output = malloc(buf_size);
@@ -980,7 +1021,7 @@ unsigned char* decompress_flate(int* result, unsigned char* input, size_t input_
  * @return A pointer to the next string
  */
 
-unsigned char* next_str(int* result, unsigned char* c)
+unsigned char* next_str(CanimResult* result, unsigned char* c)
 {
     for (int32_t i = 0;*(c++)&&((i++-BUFFER_SIZE)>>31);)
     {
@@ -997,7 +1038,7 @@ unsigned char* next_str(int* result, unsigned char* c)
  * @return The offset
  */
 
-long findxref(int* result, FILE* f)
+long findxref(CanimResult* result, FILE* f)
 {
     char buf[BUFFER_SIZE + 1];
     long filesize;
@@ -1055,7 +1096,7 @@ long findxref(int* result, FILE* f)
  * @return nothing
  */
 
-void test_findxref(int* result)
+void test_findxref(CanimResult* result)
 {
     FILE* f = fopen("8.pdf", "rb");
     if(!f)
@@ -1083,7 +1124,7 @@ void test_findxref(int* result)
  * @return the xref
  */
 
-PDFXref* get_xref(int* result, FILE* f)
+PDFXref* get_xref(CanimResult* result, FILE* f)
 {
     long offset = findxref(result, f);
     if (IS_AN_ERROR(*result))
@@ -1250,7 +1291,7 @@ PFNGLDISABLEVERTEXATTRIBARRAYPROC pglDisableVertexAttribArray;
  * @return nothing lol
  */
 
-void load_gl_shader_functions(int* result)
+void load_gl_shader_functions(CanimResult* result)
 {
     LOAD_GL(PFNGLUNIFORM1FPROC,                pglUniform1f,                "glUniform1f");
     LOAD_GL(PFNGLUNIFORM3FPROC,                pglUniform3f,                "glUniform3f");
@@ -1299,7 +1340,7 @@ void load_gl_shader_functions(int* result)
  * 
  */
 
-GLuint compile_shader(int* result, const char* src, GLenum type) 
+GLuint compile_shader(CanimResult* result, const char* src, GLenum type) 
 {
     GLuint shader = pglCreateShader(type);
     pglShaderSource(shader, 1, &src, null);
@@ -1323,7 +1364,7 @@ GLuint compile_shader(int* result, const char* src, GLenum type)
  * @return The shader program
  */
 
-GLuint create_shader_program(int* result, const char* vs_src, const char* fs_src) 
+GLuint create_shader_program(CanimResult* result, const char* vs_src, const char* fs_src) 
 {
     GLuint vs = compile_shader(result, vs_src, GL_VERTEX_SHADER);
     if (IS_AN_ERROR(*result))
@@ -1363,7 +1404,7 @@ GLuint create_shader_program(int* result, const char* vs_src, const char* fs_src
  * @return the framebuffer
  */
 
-unsigned char* get_framebuffer_rgb(int* result, int w, int h, unsigned char* previous_buffer) 
+unsigned char* get_framebuffer_rgb(CanimResult* result, int w, int h, unsigned char* previous_buffer) 
 {
     unsigned char* rgb;
     if (!previous_buffer)
@@ -1425,7 +1466,7 @@ void close_ffmpeg_pipe(FILE* pipef)
  * @return The triangulation
  */
 
-Triangulation* clone_triangulation(int* result, Triangulation* src)
+Triangulation* clone_triangulation(CanimResult* result, Triangulation* src)
 {
     Triangulation* tri = malloc(sizeof(Triangulation));
     if (!tri)
@@ -1434,19 +1475,14 @@ Triangulation* clone_triangulation(int* result, Triangulation* src)
         return null; 
     }
     tri->triangle_count = src->triangle_count;
-    tri->triangles = malloc(sizeof(Vec3[3]) * BIT_ALIGN(src->triangle_count));
+    tri->triangles = malloc(sizeof(TriangleRaw) * BIT_ALIGN(src->triangle_count));
     if (!tri->triangles)
     {
         free(tri);
         *result = TRI_CLONE_TRI_ERROR;
         return null;
     }
-    for (int i = 0; i < tri->triangle_count; i++)
-    {
-        tri->triangles[i][0] = src->triangles[i][0];
-        tri->triangles[i][1] = src->triangles[i][1];
-        tri->triangles[i][2] = src->triangles[i][2];
-    }
+    memcpy(tri->triangles, src->triangles, sizeof(TriangleRaw) * tri->triangle_count);
     *result = SUCCESS;
     return tri;
 } 
@@ -1457,7 +1493,7 @@ Triangulation* clone_triangulation(int* result, Triangulation* src)
  * @return The triangulation
  */
 
-Triangulation* empty_triangulation(int* result)
+Triangulation* empty_triangulation(CanimResult* result)
 {
     Triangulation* tri = malloc(sizeof(Triangulation));
     if (!tri)
@@ -1482,7 +1518,7 @@ Triangulation* empty_triangulation(int* result)
  * @return Nothing
  */
 
-void add_triangle(int* result, Triangulation* tri, Vec3 a, Vec3 b, Vec3 c)
+void add_triangle(CanimResult* result, Triangulation* tri, TriangleRaw triangle)
 {
     if (!tri) 
     {
@@ -1493,7 +1529,7 @@ void add_triangle(int* result, Triangulation* tri, Vec3 a, Vec3 b, Vec3 c)
     if (REALIGN(tri->triangle_count, tri->triangle_count + 1))
     {
         int new_capacity = BIT_ALIGN(tri->triangle_count + 1); 
-        Vec3 (*temp)[3] = realloc(tri->triangles, new_capacity * sizeof(Vec3[3]));
+        TriangleRaw* temp = realloc(tri->triangles, new_capacity * sizeof(TriangleRaw));
         if (!temp)
         {
             *result = ADDING_TRI_REALLOC_FAILURE;
@@ -1501,9 +1537,7 @@ void add_triangle(int* result, Triangulation* tri, Vec3 a, Vec3 b, Vec3 c)
         }
         tri->triangles = temp;
     }
-    tri->triangles[tri->triangle_count][0] = a;
-    tri->triangles[tri->triangle_count][1] = b;
-    tri->triangles[tri->triangle_count][2] = c;
+    memcpy(tri->triangles + tri->triangle_count, &triangle, sizeof(TriangleRaw));
     tri->triangle_count++;
     *result = SUCCESS;
 }
@@ -1517,7 +1551,7 @@ void add_triangle(int* result, Triangulation* tri, Vec3 a, Vec3 b, Vec3 c)
  * @return Nothing
  */
 
-void merge_triangulations(int* result, Triangulation** triangulations, int tri_count, Triangulation* output)
+void merge_triangulations(CanimResult* result, Triangulation** triangulations, int tri_count, Triangulation* output)
 {
     Triangulation* e = empty_triangulation(result);
     if (e == null)
@@ -1541,9 +1575,7 @@ void merge_triangulations(int* result, Triangulation** triangulations, int tri_c
             add_triangle(
                 result,
                 output, 
-                triangulations[i]->triangles[j][0],
-                triangulations[i]->triangles[j][1],
-                triangulations[i]->triangles[j][2]
+                triangulations[i]->triangles[j]
             );
             if (IS_AN_ERROR(*result))
             {
@@ -1561,7 +1593,7 @@ void merge_triangulations(int* result, Triangulation** triangulations, int tri_c
  * @return nothing
  */
 
-void free_triangulation( Triangulation* triangulation)
+void free_triangulation(Triangulation* triangulation)
 {
     free(triangulation->triangles);   
     triangulation->triangles = null;
@@ -1932,7 +1964,7 @@ int intersecting_segments(Vec3 a, Vec3 b, Vec3 c, Vec3 d, Vec3* out)
  * @return This outputs the PSLG (or a pointer to it but nobody asked)
  */
 
-PSLG* generate_pslg(int* result, Vec3* vertices, int vertex_count)
+PSLG* generate_pslg(CanimResult* result, PolygonRaw pr)
 {
     PSLG* new = malloc(sizeof(PSLG));
     if(!new)
@@ -1940,9 +1972,9 @@ PSLG* generate_pslg(int* result, Vec3* vertices, int vertex_count)
         *result = PSLG_INIT_MALLOC_ERROR;
         return null;
     }
-    new->vertex_count = vertex_count;
-    new->edge_count = vertex_count;
-    new->vertices = malloc(BIT_ALIGN(vertex_count) * sizeof(Vec3));
+    new->vertex_count = pr.vertex_count;
+    new->edge_count = pr.vertex_count;
+    new->vertices = malloc(BIT_ALIGN(pr.vertex_count) * sizeof(Vec3));
     if (!new->vertices) 
     {
         new->vertex_count = 0;
@@ -1951,9 +1983,9 @@ PSLG* generate_pslg(int* result, Vec3* vertices, int vertex_count)
         *result = PSLG_VERTEX_MALLOC_ERROR;
         return null;
     }
-    for (int i = 0; i < vertex_count; i++)
+    for (int i = 0; i < pr.vertex_count; i++)
     {
-        new->vertices[i] = vertices[i];
+        new->vertices[i] = pr.vertices[i];
     }
 
     new->edges = malloc(BIT_ALIGN(new->edge_count) * sizeof(int[2]));
@@ -1966,11 +1998,12 @@ PSLG* generate_pslg(int* result, Vec3* vertices, int vertex_count)
         return null;
     }
 
-    for (int i = 0; i < vertex_count; i++)
+    for (int i = 0; i < pr.vertex_count; i++)
     {
         new->edges[i][0] = i;
-        new->edges[i][1] = (i + 1) % vertex_count; 
+        new->edges[i][1] = (i + 1) % pr.vertex_count; 
     }
+    new->poly = pr;
     *result = SUCCESS;
     return new;
 }
@@ -1984,7 +2017,7 @@ PSLG* generate_pslg(int* result, Vec3* vertices, int vertex_count)
  * @return nothing
  */
 
-void dedup_pslg_a_vertex(int* result, PSLG* pslg, int v1, int v2)
+void dedup_pslg_a_vertex(CanimResult* result, PSLG* pslg, int v1, int v2)
 {
     if (v1 == v2)
     {
@@ -2047,7 +2080,7 @@ void dedup_pslg_a_vertex(int* result, PSLG* pslg, int v1, int v2)
  * @return nothing
  */
 
-void dedup_pslg_one_vertex(int* result, PSLG* pslg)
+void dedup_pslg_one_vertex(CanimResult* result, PSLG* pslg)
 {
     for (int i = 0; i < pslg->vertex_count; i++)
     {
@@ -2070,7 +2103,7 @@ void dedup_pslg_one_vertex(int* result, PSLG* pslg)
  * @return nothing
  */
 
-void dedup_pslg_vertex(int* result, PSLG* pslg)
+void dedup_pslg_vertex(CanimResult* result, PSLG* pslg)
 {
     for(;;)
     {
@@ -2095,7 +2128,7 @@ void dedup_pslg_vertex(int* result, PSLG* pslg)
  * @return Nothing
  */
 
-void dedup_pslg_a_edge(int* result, PSLG* pslg, int e1, int e2)
+void dedup_pslg_a_edge(CanimResult* result, PSLG* pslg, int e1, int e2)
 {
     if (e1 > e2)
     {
@@ -2161,7 +2194,7 @@ void dedup_pslg_a_edge(int* result, PSLG* pslg, int e1, int e2)
  * @return nothing
  */
 
-void dedup_pslg_one_edge(int* result, PSLG* pslg)
+void dedup_pslg_one_edge(CanimResult* result, PSLG* pslg)
 {
     for (int i = 0; i < pslg->edge_count; i++)
     {
@@ -2184,7 +2217,7 @@ void dedup_pslg_one_edge(int* result, PSLG* pslg)
  * @return nothing
  */
 
-void dedup_pslg_edge(int* result, PSLG* pslg)
+void dedup_pslg_edge(CanimResult* result, PSLG* pslg)
 {
     for(;;)
     {
@@ -2207,7 +2240,7 @@ void dedup_pslg_edge(int* result, PSLG* pslg)
  * @return nothing
  */
 
-void dedup_pslg(int *result, PSLG* pslg)
+void dedup_pslg(CanimResult* result, PSLG* pslg)
 {
     dedup_pslg_vertex(result, pslg);
     if (IS_AN_ERROR(*result))
@@ -2232,7 +2265,7 @@ void dedup_pslg(int *result, PSLG* pslg)
  */
 
 
-void splitPSLG(int* result, PSLG* pslg, int edge1, int edge2)
+void splitPSLG(CanimResult* result, PSLG* pslg, int edge1, int edge2)
 {
     Vec3 out;
     if
@@ -2304,7 +2337,7 @@ void splitPSLG(int* result, PSLG* pslg, int edge1, int edge2)
  * @return This outputs nothing 
  */
 
-void remove_single_edge(int* result, PSLG* pslg)
+void remove_single_edge(CanimResult* result, PSLG* pslg)
 {
     for(int i = 0; i < pslg->edge_count; i++)
     {
@@ -2327,7 +2360,7 @@ void remove_single_edge(int* result, PSLG* pslg)
  * @return This outputs nothing 
  */
 
-void split_entirely(int* result, PSLG* pslg)
+void split_entirely(CanimResult* result, PSLG* pslg)
 {
     for(;;)
     {
@@ -2380,7 +2413,7 @@ void free_pslg(PSLG* pslg)
  * @return This is the resulting PSLGTriangulation
  */
 
-PSLGTriangulation* create_pslg_triangulation(int* result, PSLG* pslg)
+PSLGTriangulation* create_pslg_triangulation(CanimResult* result, PSLG* pslg)
 {
     PSLGTriangulation* pslgtri = malloc(sizeof(PSLGTriangulation));
     if (!pslgtri)
@@ -2407,7 +2440,7 @@ PSLGTriangulation* create_pslg_triangulation(int* result, PSLG* pslg)
  * @return Nothing
  */
 
-void attack_vertex(int* result, PSLGTriangulation* pslgtri, int vertex_idx)
+void attack_vertex(CanimResult* result, PSLGTriangulation* pslgtri, int vertex_idx)
 {   
     PSLG* pslg = pslgtri->pslg;
     Triangulation* tri = pslgtri->triangulation;
@@ -2455,7 +2488,12 @@ void attack_vertex(int* result, PSLGTriangulation* pslgtri, int vertex_idx)
         v2 = pslg->edges[e2][1];
         v3 = pslg->edges[e2][0];
     }
-    add_triangle(result, tri, pslg->vertices[v1], pslg->vertices[v2], pslg->vertices[v3]);
+    TriangleRaw tr;
+    tr.fd = pslgtri->pslg->poly.fd;
+    tr.vertices[0] = pslg->vertices[v1];
+    tr.vertices[1] = pslg->vertices[v2];
+    tr.vertices[2] = pslg->vertices[v3];
+    add_triangle(result, tri, tr);
     if (IS_AN_ERROR(*result))
     {
         return;
@@ -2537,7 +2575,7 @@ void attack_vertex(int* result, PSLGTriangulation* pslgtri, int vertex_idx)
  * @return nothing
  */
 
-void attack_single_vertex(int* result, PSLGTriangulation* pslgtri)
+void attack_single_vertex(CanimResult* result, PSLGTriangulation* pslgtri)
 {
     for(int i = 0; i < pslgtri->pslg->vertex_count; i++)
     {
@@ -2562,7 +2600,7 @@ void attack_single_vertex(int* result, PSLGTriangulation* pslgtri)
  * @return nothing
  */
 
-void attack_all_vertices(int* result, PSLGTriangulation* pslgtri)
+void attack_all_vertices(CanimResult* result, PSLGTriangulation* pslgtri)
 {
     for(;;)
     {
@@ -2588,10 +2626,10 @@ void attack_all_vertices(int* result, PSLGTriangulation* pslgtri)
  * @return output nothing
  */
 
-void generate_triangulation(int* result, Vec3* vertices, int vertex_count, Triangulation* tri)
+void generate_triangulation(CanimResult* result, PolygonRaw pr, Triangulation* tri)
 {
     printf("I HATE YOU\n");
-    PSLG* pslg = generate_pslg(result, vertices, vertex_count);
+    PSLG* pslg = generate_pslg(result, pr);
     if (IS_AN_ERROR(*result))
     {
         goto cleanup;
@@ -2657,7 +2695,7 @@ void generate_triangulation(int* result, Vec3* vertices, int vertex_count, Trian
     }
     return;
 }
-
+/// THIS MUST BE REFACTORED
 /**
  * @brief Triangulates the polyhedron
  * @param[out] result The status
