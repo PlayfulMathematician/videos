@@ -7,7 +7,7 @@ for i in range(0, 4):
                     continue
                 if j == k == l and j!=1:
                     continue
-                c+=1;
+                c+=1
                 print(f"{i}{j}{k}{l}")
 
 print(c)
