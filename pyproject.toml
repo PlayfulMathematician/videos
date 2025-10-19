@@ -2,19 +2,15 @@
 name = "videos"
 version = "0.1.0"
 description = ""
-authors = [
-    {name = "playfulmathematician",email = "me@playfulmathematician.com"}
-]
-license = {text = "AGPL-3.0-or-later"}
-readme = "README.md"
+authors = [{ name = "playfulmathematician", email = "me@playfulmathematician.com" }]
 requires-python = ">=3.13"
+readme = "README.md"
+license = { text = "AGPL-3.0-or-later" }
+dependencies = [
+    "bs4>=0.0.2,<0.0.3",
+    "requests>=2.31.0,<3.0.0",
+]
 
-
-[tool.poetry.dependencies]
-python = ">=3.13"
-bs4 = ">=0.0.2,<0.0.3"
-requests = ">=2.31.0,<3.0.0"
-
-[tool.poetry.group.dev.dependencies]
-pylint = ">=3.3.8,<4.0.0"
+[dependency-groups]
+dev = ["pylint>=3.3.8,<4.0.0"]
 
