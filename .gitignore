@@ -14,9 +14,8 @@
 *.d
 uniformity/src/main
 __pycache__
-# Visual Studio Code and Jetbrains IDE stuff
 .idea
 .vscode
-# Thumbnails
 Thumbs.db
 uniformity/src/docs
+tags

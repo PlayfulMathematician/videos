@@ -38,6 +38,7 @@
 */
 
 /* The standard libraries */
+#include <errno.h>
 #include <stdio.h>
 #include <stdbool.h>
 #include <stdlib.h>
@@ -179,11 +180,13 @@ typedef uint32_t CanimResult;
   #define PCLOSE _pclose
   #define FILENO _fileno
   #define FTRUNCATE _chsize
+  #define WB "wb"
 #else
   #define POPEN  popen
   #define PCLOSE pclose
   #define FILENO fileno
   #define FTRUNCATE ftruncate
+  #define WB "w"
 #endif
 
 const char* triangulation_vs = 
@@ -1462,7 +1465,13 @@ FILE* open_ffmpeg_pipe(int w, int h, int fps, const char* out_mp4)
         "ffmpeg -y -f rawvideo -pixel_format rgb24 -video_size %dx%d -framerate %d -i - "
         "-vf vflip -c:v libx264 -preset veryfast -crf 18 -pix_fmt yuv420p \"%s\"",
         w, h, fps, out_mp4);
-    return POPEN(cmd, "wb");
+    
+    FILE* pipef = POPEN(cmd, WB);
+    if (!pipef)
+    {
+    	fprintf(stderr, "popen failed: %s (errno=%d)\n",strerror(errno),errno);
+    }
+    return pipef;
 }
 
 /**
@@ -3309,10 +3318,6 @@ void draw_triangulation(CanimResult* result, GLuint prog, Triangulation* tri)
 
 int main(int argc, char *argv[]) 
 {
-    CanimResult j = SUCCESS;
-    test_findxref(&j);
-    return 0;
-
     if (argc != 2)
     {
         fprintf(stderr, "I wish for two parameters!");
