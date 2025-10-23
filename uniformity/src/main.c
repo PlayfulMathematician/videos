@@ -77,7 +77,6 @@ typedef uint32_t CanimResult;
 /// @brief I do not want to capitalize NULL
 #define null NULL
 
-
 /// @def BUFFER_SIZE
 /// @brief The size of a buffer
 #define BUFFER_SIZE 4096
@@ -178,9 +177,13 @@ typedef uint32_t CanimResult;
 #ifdef _WIN32
   #define POPEN  _popen
   #define PCLOSE _pclose
+  #define FILENO _fileno
+  #define FTRUNCATE _chsize
 #else
   #define POPEN  popen
   #define PCLOSE pclose
+  #define FILENO fileno
+  #define FTRUNCATE ftruncate
 #endif
 
 const char* triangulation_vs = 
@@ -952,6 +955,23 @@ typedef struct
     size_t data_len;
 }
 PDFObjStream;
+
+/**
+ * @brief truncate an open file
+ * @param f this is the file
+ * @return nothing
+ */
+
+void truncate_open_file(FILE* f)
+{
+    if (!f) 
+    {
+        return;
+    }
+    fflush(f);
+    FTRUNCATE(FILENO(f), 0);
+    rewind(f);
+}
 
 
 /**
@@ -2628,74 +2648,56 @@ void attack_all_vertices(CanimResult* result, PSLGTriangulation* pslgtri)
 
 void generate_triangulation(CanimResult* result, PolygonRaw pr, Triangulation* tri)
 {
-    printf("I HATE YOU\n");
     PSLG* pslg = generate_pslg(result, pr);
     if (IS_AN_ERROR(*result))
     {
-        goto cleanup;
         return;
     }
     split_entirely(result, pslg);
     if (IS_AN_ERROR(*result))
     {
-        goto cleanup;
+        free_pslg(pslg);
         return;
     }
+    
     PSLGTriangulation* pslgtri = create_pslg_triangulation(result, pslg);
     if (IS_AN_ERROR(*result))
     {
-        goto cleanup;
+        free_triangulation(pslgtri->triangulation);
+        free_pslg(pslg);
+        free(pslgtri);
         return;
     }
     attack_all_vertices(result, pslgtri);
     if (IS_AN_ERROR(*result))
     {
-        goto cleanup;
+        free_triangulation(pslgtri->triangulation);
+        free_pslg(pslg);
+        free(pslgtri);
         return;
     }
 
     for(int i = 0; i < pslgtri->triangulation->triangle_count; i++)
     {
         add_triangle(result, tri, 
-            pslgtri->triangulation->triangles[i][0],
-            pslgtri->triangulation->triangles[i][1],
-            pslgtri->triangulation->triangles[i][2]
+            pslgtri->triangulation->triangles[i]
         );
         if (IS_AN_ERROR(*result))
         {
-            goto cleanup;
+            free_triangulation(pslgtri->triangulation);
+            free_pslg(pslg);
+            free(pslgtri);
             return;
         }
     }
     tri->triangle_count = pslgtri->triangulation->triangle_count;
 
-    free_pslg(pslgtri->pslg);
+    free_pslg(pslg);
     free_triangulation(pslgtri->triangulation);
     free(pslgtri);
     *result = SUCCESS;
-    printf("%i \n", tri->triangle_count);
-    return;
-    cleanup:
-    {
-        print_error(*result);
-        printf("GRRR\n");
-        if (pslg)
-        {
-            free_pslg(pslg);
-        }
-        if (pslgtri)
-        {
-            free_triangulation(pslgtri->triangulation);
-            free(pslgtri);
-        }
-        if (tri)
-        {
-            free_triangulation(tri);
-        }
-    }
-    return;
 }
-/// THIS MUST BE REFACTORED
+
 /**
  * @brief Triangulates the polyhedron
  * @param[out] result The status
@@ -2704,76 +2706,101 @@ void generate_triangulation(CanimResult* result, PolygonRaw pr, Triangulation* t
  * @return nothing
  */
 
-void triangulate_polyhedron(int* result, Polyhedron* poly, Triangulation* out)
+void triangulate_polyhedron(CanimResult* result, Polyhedron* poly, Triangulation* out)
 {
     Triangulation** tris = malloc(poly->face_count * sizeof(Triangulation*));
     if (!tris)
     {
         *result = TRIANGULATE_POLYHEDRON_BATCH_TRIANGULATIONS_MALLOC_ERROR;
-        goto cleanup;
-    }
-    Triangulation* t;
-    Vec3* vertices;
-    for (int i = 0; i < poly->face_count; i++)
-    {   
-        t = empty_triangulation(result);
-        if (IS_AN_ERROR(*result))
-        {
-            goto cleanup;
-        }
-        vertices = malloc(BIT_ALIGN(poly->face_sizes[i]) * sizeof(Vec3)); 
-        if (!vertices)
-        {
-            *result = TRIANGULATE_POLYHEDRON_VERTEX_MALLOC_ERROR; // personality dialysis
-            goto cleanup;
-
-        }
-        for (int j = 0; j < poly->face_sizes[i]; j++)
-        {
-            vertices[j] = poly->vertices[poly->faces[i][j]];
-        }
-        generate_triangulation(result, vertices, poly->face_sizes[i], t);
-        if (IS_AN_ERROR(*result))
-        {
-            goto cleanup;
-        }
-        free(vertices);
-        tris[i] = t;
-    }
-    merge_triangulations(result, tris, poly->face_count, out);
-    if (IS_AN_ERROR(*result))
-    {
-        
         return;
     }
-    for(int i = 0; i < poly->face_count; i++)
+
+    for (int i = 0; i < poly->face_count; i++)
     {
-        free_triangulation(tris[i]);
+        tris[i] = NULL;
     }
-    free(tris);
-    *result = SUCCESS;
-    return;
-    cleanup:
-        for (int i = 0 ; i < poly->face_count; i++)
+
+    for (int i = 0; i < poly->face_count; i++)
+    {
+        Triangulation* t = empty_triangulation(result);
+        if (IS_AN_ERROR(*result))
+        {
+            for (int j = 0; j < i; j++)
+            {
+                if (tris[j]) 
+                {
+                    free_triangulation(tris[j]);
+                }
+            }
+            free(tris);
+            return;
+        }
+        PolygonIndexed* face = &poly->poly[i];
+        Vec3* verts = malloc(BIT_ALIGN(face->vertex_count) * sizeof(Vec3));
+        if (!verts)
+        {
+            *result = TRIANGULATE_POLYHEDRON_VERTEX_MALLOC_ERROR;
+            free_triangulation(t);
+            for (int j = 0; j < i; j++)
+            {
+                if (tris[j]) 
+                {
+                    free_triangulation(tris[j]);
+                }
+            }
+            free(tris);
+            return;
+        }
+
+        for (int v = 0; v < face->vertex_count; v++)
+        {
+            verts[v] = poly->vertices[face->vertices[v]];
+        }
+
+        PolygonRaw pr = 
+        {
+            .vertex_count = face->vertex_count,
+            .vertices = verts,
+            .fd = face->fd
+        };
+        
+        generate_triangulation(result, pr, t);
+        free(verts);
+        if (IS_AN_ERROR(*result))
+        {
+            free_triangulation(t);
+            for (int j = 0; j < i; j++)
+            {
+                if (tris[j]) 
+                {
+                    free_triangulation(tris[j]);
+                }
+            }
+            free(tris);
+            return;
+        }
+
+        tris[i] = t;
+    }
+
+    merge_triangulations(result, tris, poly->face_count, out);
+    for (int i = 0; i < poly->face_count; i++)
+    {
+        if (tris[i]) 
         {
             free_triangulation(tris[i]);
         }
-        free(tris);
-        if (vertices)
-        {
-            free(vertices);
-        }
-        if (t)
-        {
-            free_triangulation(t);
-        }
-        if (out)
-        {
-            free_triangulation(out);
-        }
-    return;
-        
+    }
+    free(tris);
+
+    if (IS_AN_ERROR(*result))
+    {
+        return;
+    }
+
+    *result = SUCCESS;
 }
+
 
 /**
  * @brief This takes a polyhedron and frees it
@@ -2781,17 +2808,37 @@ void triangulate_polyhedron(int* result, Polyhedron* poly, Triangulation* out)
  * @return nothing
  */
 
+
 void free_polyhedron(Polyhedron* poly)
 {
-    for(int i = 0; i < poly->face_count; i++)
+    if (!poly) 
     {
-        free(poly->faces[i]);
+        return;
     }
-    free(poly->face_sizes);
-    free(poly->faces);
-    free(poly->vertices);
+    
+
+    if (poly->poly)
+    {
+        for (int i = 0; i < poly->face_count; i++)
+        {
+            PolygonIndexed* face = &poly->poly[i];
+            if (face->vertices)
+            {
+                free(face->vertices);
+            }
+        }
+        free(poly->poly);
+    }
+
+    if (poly->vertices)
+    {
+        free(poly->vertices);
+    }
+
     free(poly);
 }
+
+
 
 /**
  * @brief This allocates memory for a polyhedron
@@ -2801,96 +2848,34 @@ void free_polyhedron(Polyhedron* poly)
  * @return A pointer to your brand new polyhedron
  */
 
-Polyhedron* create_polyhedron(int* result, int nv, int nf) 
+Polyhedron* create_polyhedron(CanimResult* result, int nv, int nf) 
 {
     Polyhedron* poly = malloc(sizeof(Polyhedron));
     if (!poly)
     {
         *result = POLYHEDRON_MALLOC_ERROR;
-        goto clean;
+        return NULL;
     }
-    poly->vertex_count = nv;
-    poly->face_count = nf;
-    poly->vertices = malloc(nv * sizeof(Vec3));
-    if (!poly->vertices)
+    poly->face_count=nf;
+    poly->vertex_count=nv;
+    poly->vertices = malloc(sizeof(Vec3) * nv);
+    if(!poly->vertices)
     {
+        free(poly);
         *result = POLYHEDRON_VERTEX_MALLOC_ERROR;
-        goto clean;
+        return NULL;
     }
-    poly->faces = malloc(nf * sizeof(int*));
-    if (!poly->faces)
+    poly->poly = malloc(sizeof(PolygonIndexed) * nf);
+    if(!poly->poly)
     {
+        free(poly->vertices);
+        free(poly);
         *result = POLYHEDRON_FACE_MALLOC_ERROR;
-        goto clean; 
+        return NULL;
     }
-    poly->face_sizes = malloc(nf * sizeof(int));
-    if (!poly->face_sizes)
-    {
-        *result = POLYHEDRON_FACE_SIZES_MALLOC_ERROR;
-        goto clean;
-    }
-    *result = SUCCESS;
     return poly;
-    clean:
-        free_polyhedron(poly);
-        return (Polyhedron*)null;
 }
 
-
-/**
- * @brief This takes a global buffer and renders it
- * @param[out] result The result of the function
- * @param gb This is the global buffer to be rendered
- * @param t This is the frame index
- * @return This returns nothing
- */
-
-void render_gb(int* result, GlobalBuffer* gb, int t)
-{
-    for(int i = 0; i < gb->videodata->section_count; i++)
-    {
-        AnimationSection* animation_section = &gb->videodata->animation_section[i];
-        if (animation_section->end_t < t)
-        {
-            continue;
-        }    
-        if (animation_section->start_t > t)
-        {
-            continue;
-        }    
-        if (t == animation_section->start_t)
-        {
-            animation_section->init(result, animation_section);
-        }
-        if (t == animation_section->end_t)
-        {
-            free(animation_section->animations);
-            free(animation_section);
-            continue;
-        }
-        for (int j = 0; j < animation_section->animation_count; j++)
-        {
-            Animation* a = &animation_section->animations[j];
-            if (a->start_t == t)
-            {
-                a->construct(result, a);
-            }
-            if (a->start_t <= t && a->end_t >= t)
-            {
-                a->preproc(result, a, t);
-                a->render(result, a, t);
-                a->postproc(result, a, t);
-            }
-            if (a->end_t == t)
-            {
-                a->free(result, a);
-            }
-        }
-    }
-}
-/**
- * @todo Parse OFF Files
- */
 
 /**
  * @brief Do not touch
@@ -2898,10 +2883,9 @@ void render_gb(int* result, GlobalBuffer* gb, int t)
  * @param fin The file
  * @param buf The output
  * @return nothing
-
  */
 
-void read_clean_line(int* result, FILE* fin, char* buf)
+void read_clean_line(CanimResult* result, FILE* fin, char* buf)
 {
     for (;fgets(buf, BUFFER_SIZE, fin);) 
     {
@@ -2940,7 +2924,7 @@ void read_clean_line(int* result, FILE* fin, char* buf)
  * @return nothing
  */
 
-void read_off_header(int* result, FILE* fin, int* nv, int* nf)
+void read_off_header(CanimResult* result, FILE* fin, int* nv, int* nf)
 {
     char line[BUFFER_SIZE];
     read_clean_line(result, fin, line);
@@ -2984,7 +2968,7 @@ void read_off_header(int* result, FILE* fin, int* nv, int* nf)
  * @return nothing
  */
 
-void read_vertex(int* result, FILE* fin, Polyhedron* poly, int vertex_idx)
+void read_vertex(CanimResult* result, FILE* fin, Polyhedron* poly, int vertex_idx)
 {
     char line[BUFFER_SIZE];
     read_clean_line(result, fin, line);
@@ -3025,7 +3009,7 @@ void read_vertex(int* result, FILE* fin, Polyhedron* poly, int vertex_idx)
  * @return nothing
  */
 
-void read_face(int* result, FILE* fin, Polyhedron* poly, int face_idx)
+void read_face(CanimResult* result, FILE* fin, Polyhedron* poly, int face_idx)
 {
     char line[BUFFER_SIZE];
     read_clean_line(result, fin, line);
@@ -3039,9 +3023,10 @@ void read_face(int* result, FILE* fin, Polyhedron* poly, int face_idx)
         *result = OFF_FACE_ERROR;
         return;
     }
-    poly->face_sizes[face_idx] = atoi(t);
-    poly->faces[face_idx] = malloc(poly->face_sizes[face_idx] * sizeof(int));
-    for (int i = 0; i < poly->face_sizes[face_idx]; i++)
+    poly->poly[face_idx].vertex_count = atoi(t);
+    /// TODO: Fix this utter piece of trash
+    poly->poly[face_idx].vertices = malloc(sizeof(int) * poly->poly[face_idx].vertex_count);
+    for (int i = 0; i < poly->poly[face_idx].vertex_count; i++)
     {
         t = strtok(null, " \t");
         if (!t) 
@@ -3049,8 +3034,15 @@ void read_face(int* result, FILE* fin, Polyhedron* poly, int face_idx)
             *result = OFF_FACE_ERROR;
             return;
         }
-        poly->faces[face_idx][i] = atoi(t);
+        poly->poly[face_idx].vertices[i] = atoi(t);
     }
+    poly->poly[face_idx].fd.normal = normal_vec3
+    (
+        poly->vertices[poly->poly[face_idx].vertices[0]],
+        poly->vertices[poly->poly[face_idx].vertices[1]],
+        poly->vertices[poly->poly[face_idx].vertices[2]]
+    );
+    poly->poly[face_idx].fd.color.rgba = 0x7f7f7fff;
     *result = SUCCESS;
 }
 
@@ -3061,7 +3053,7 @@ void read_face(int* result, FILE* fin, Polyhedron* poly, int face_idx)
  * @return The polyhedron
  */
 
-Polyhedron* read_off_into_polyhedron(int* result, FILE* fin)
+Polyhedron* read_off_into_polyhedron(CanimResult* result, FILE* fin)
 {
     int nv = 0;
     int nf = 0;
@@ -3131,7 +3123,7 @@ void lef32_bytes(float v, unsigned char b[4])
  * @return nothing
  */
 
-void write_to_stl(int* result, Triangulation* tri, FILE* fin)
+void write_to_stl(CanimResult* result, Triangulation* tri, FILE* fin)
 {   
     unsigned char header[80];
     memset(header, 0, sizeof(header));
@@ -3149,10 +3141,10 @@ void write_to_stl(int* result, Triangulation* tri, FILE* fin)
     }
     for (int i = 0; i < tri->triangle_count; i++)
     {
-        Vec3 a = tri->triangles[i][0];
-        Vec3 b = tri->triangles[i][1];
-        Vec3 c = tri->triangles[i][2];
-        Vec3 n = normal_vec3(a, b, c);
+        Vec3 a = tri->triangles[i].vertices[0];
+        Vec3 b = tri->triangles[i].vertices[1];
+        Vec3 c = tri->triangles[i].vertices[2];
+        Vec3 n = tri->triangles[i].fd.normal;
         lef32_bytes(n.x, h);
         if(fwrite(h, 1, 4, fin) != 4)
         {
@@ -3242,7 +3234,7 @@ void write_to_stl(int* result, Triangulation* tri, FILE* fin)
  * @param tri  The triangulation to draw.
  */
 
-void draw_triangulation(int* result, GLuint prog, Triangulation* tri)
+void draw_triangulation(CanimResult* result, GLuint prog, Triangulation* tri)
 {
     float* data = malloc(sizeof(float) * tri->triangle_count * 3 * 6);
     if (!data) 
@@ -3253,10 +3245,10 @@ void draw_triangulation(int* result, GLuint prog, Triangulation* tri)
 
     for (int i = 0; i < tri->triangle_count; i++) 
     {
-        Vec3 a = tri->triangles[i][0];
-        Vec3 b = tri->triangles[i][1];
-        Vec3 c = tri->triangles[i][2];
-        Vec3 n = normal_vec3(a, b, c); 
+        Vec3 a = tri->triangles[i].vertices[0];
+        Vec3 b = tri->triangles[i].vertices[1];
+        Vec3 c = tri->triangles[i].vertices[2];
+        Vec3 n = tri->triangles[i].fd.normal; 
 
         int base = i * 18; 
         float v[18] = 
@@ -3317,7 +3309,7 @@ void draw_triangulation(int* result, GLuint prog, Triangulation* tri)
 
 int main(int argc, char *argv[]) 
 {
-    int j = SUCCESS;
+    CanimResult j = SUCCESS;
     test_findxref(&j);
     return 0;
 
@@ -3327,7 +3319,7 @@ int main(int argc, char *argv[])
         return 1;
     }
 
-    int result = SUCCESS;
+    CanimResult result = SUCCESS;
     FILE* fin = fopen(argv[1], "r");
     Polyhedron* poly = read_off_into_polyhedron(&result, fin);
     fclose(fin);
@@ -3422,7 +3414,7 @@ int main(int argc, char *argv[])
 
         SDL_GL_SwapWindow(win);
         int w = 800, h = 600;
-        int frame_result;
+        CanimResult frame_result;
         unsigned char* rgb = get_framebuffer_rgb(&frame_result, w, h, null);
         if (frame_result == SUCCESS && rgb) 
         {

@@ -12,6 +12,7 @@
 *.stl
 *.o
 *.d
+uniformity/src/main
 __pycache__
 # Visual Studio Code and Jetbrains IDE stuff
 .idea
