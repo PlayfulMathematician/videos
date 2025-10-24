@@ -193,36 +193,26 @@ const char* triangulation_vs =
     "#version 120\n"
     "attribute vec3 position;\n"
     "attribute vec3 normal;\n"
+    "attribute vec4 color;\n"
     "varying vec3 vNormal;\n"
     "varying vec3 vPos;\n"
+    "varying vec4 vColor;\n"
     "void main()\n"
     "{\n"
     "   gl_Position = gl_ModelViewProjectionMatrix * vec4(position, 1.0);\n"
     "   vPos = vec3(gl_ModelViewMatrix * vec4(position, 1.0));\n"
     "   vNormal = normalize(gl_NormalMatrix * normal);\n"
+    "	vColor = color;\n"
     "}\n";
 
 const char* triangulation_fs = 
     "#version 120\n"
     "varying vec3 vNormal;\n"
     "varying vec3 vPos;\n"
+    "varying vec4 vColor;\n"
     "void main()" 
     "{\n"
-    "   vec3 N = normalize(vNormal);\n"
-    "   vec3 L = normalize(vec3(0.0, 0.0, 1.0) - vPos);\n"
-    "   vec3 V = normalize(-vPos);\n"
-    "   vec3 R = reflect(-L, N);\n"
-    "   vec3 ambient = vec3(0.15, 0.15, 0.20);\n"
-    "   float diff = max(dot(N, L), 0.0);\n"
-    "   vec3 diffuse = diff * vec3(0.9, 0.9, 0.9);\n"
-    "   float spec = 0.0;\n"
-    "   if (diff > 0.0)\n"
-    "   {\n"
-    "       spec = pow(max(dot(R, V), 0.0), 32.0);\n"
-    "   }\n"
-    "   vec3 specular = spec * vec3(0.8, 0.8, 0.8);\n"
-    "   vec3 color = ambient + diffuse + specular;\n"
-    "   gl_FragColor = vec4(color, 1.0);\n"
+    "   gl_FragColor = vColor;\n"
     "}\n";
 
 /** 
@@ -3051,7 +3041,7 @@ void read_face(CanimResult* result, FILE* fin, Polyhedron* poly, int face_idx)
         poly->vertices[poly->poly[face_idx].vertices[1]],
         poly->vertices[poly->poly[face_idx].vertices[2]]
     );
-    poly->poly[face_idx].fd.color.rgba = 0x7f7f7fff;
+    poly->poly[face_idx].fd.color.rgba = 0xff7f7f00 + (uint32_t)((float)face_idx*(float)0xff / ((float)poly->face_count));
     *result = SUCCESS;
 }
 
@@ -3242,71 +3232,78 @@ void write_to_stl(CanimResult* result, Triangulation* tri, FILE* fin)
  * @param prog The shader program (with "position" and "normal" attributes).
  * @param tri  The triangulation to draw.
  */
-
 void draw_triangulation(CanimResult* result, GLuint prog, Triangulation* tri)
 {
-    float* data = malloc(sizeof(float) * tri->triangle_count * 3 * 6);
+    const size_t vertex_size = 28;                     
+    const size_t total_bytes = tri->triangle_count * 3 * vertex_size;
+
+    uint8_t* data = malloc(total_bytes);
     if (!data) 
     {
         *result = DRAW_TRIANGULATION_MALLOC_ERROR;
         return;
     }
 
+    uint8_t* p = data;
     for (int i = 0; i < tri->triangle_count; i++) 
     {
         Vec3 a = tri->triangles[i].vertices[0];
         Vec3 b = tri->triangles[i].vertices[1];
         Vec3 c = tri->triangles[i].vertices[2];
-        Vec3 n = tri->triangles[i].fd.normal; 
+        Vec3 n = tri->triangles[i].fd.normal;
+        uint32_t col = tri->triangles[i].fd.color.rgba;
 
-        int base = i * 18; 
-        float v[18] = 
+        Vec3 verts[3] = { a, b, c };
+        for (int v = 0; v < 3; v++) 
         {
-            a.x, a.y, a.z, n.x, n.y, n.z,
-            b.x, b.y, b.z, n.x, n.y, n.z,
-            c.x, c.y, c.z, n.x, n.y, n.z
-        };
-        memcpy(&data[base], v, sizeof(v));
+            *(float*)(p + 0)  = verts[v].x;
+            *(float*)(p + 4)  = verts[v].y;
+            *(float*)(p + 8)  = verts[v].z;
+            *(float*)(p + 12) = n.x;
+            *(float*)(p + 16) = n.y;
+            *(float*)(p + 20) = n.z;
+            *(uint32_t*)(p + 24) = col;
+            p += vertex_size;
+        }
     }
 
-    GLuint vao;
-    GLuint vbo;
+    GLuint vao, vbo;
     pglGenVertexArrays(1, &vao);
     pglBindVertexArray(vao);
+
     pglGenBuffers(1, &vbo);
     pglBindBuffer(GL_ARRAY_BUFFER, vbo);
-    pglBufferData(GL_ARRAY_BUFFER, sizeof(float) * tri->triangle_count * 18, data, GL_STATIC_DRAW);
+    pglBufferData(GL_ARRAY_BUFFER, total_bytes, data, GL_STATIC_DRAW);
     free(data);
-    GLint posLoc  = pglGetAttribLocation(prog, "position");
-    GLint normLoc = pglGetAttribLocation(prog, "normal");
+
+    GLint posLoc   = pglGetAttribLocation(prog, "position");
+    GLint normLoc  = pglGetAttribLocation(prog, "normal");
+    GLint colorLoc = pglGetAttribLocation(prog, "color");
+
     if (posLoc >= 0) 
     {
         pglEnableVertexAttribArray(posLoc);
-        pglVertexAttribPointer(posLoc, 3, GL_FLOAT, GL_FALSE, sizeof(float)*6, (void*)0);
+        pglVertexAttribPointer(posLoc, 3, GL_FLOAT, GL_FALSE, 28, (void*)0);
     }
     if (normLoc >= 0) 
     {
         pglEnableVertexAttribArray(normLoc);
-        pglVertexAttribPointer(normLoc, 3, GL_FLOAT, GL_FALSE, sizeof(float)*6, (void*)(sizeof(float)*3));
+        pglVertexAttribPointer(normLoc, 3, GL_FLOAT, GL_FALSE, 28, (void*)12);
+    }
+    if (colorLoc >= 0) 
+    {
+        pglEnableVertexAttribArray(colorLoc);
+        pglVertexAttribPointer(colorLoc, 4, GL_UNSIGNED_BYTE, GL_TRUE, 28, (void*)24);
     }
 
     pglUseProgram(prog);
     glDrawArrays(GL_TRIANGLES, 0, tri->triangle_count * 3);
 
-    if (posLoc >= 0) 
-    {
-        pglDisableVertexAttribArray(posLoc);
-    }
-    if (normLoc >= 0) 
-    {
-        pglDisableVertexAttribArray(normLoc);
-    }
-    pglBindBuffer(GL_ARRAY_BUFFER, 0);
     pglBindVertexArray(0);
-
     pglDeleteBuffers(1, &vbo);
     pglDeleteVertexArrays(1, &vao);
 }
+
 
 
 /**
@@ -3410,7 +3407,7 @@ int main(int argc, char *argv[])
         glMatrixMode(GL_MODELVIEW);
         glLoadIdentity();
         glTranslatef(0,0,-3);
-        angle+=0.15;
+        angle+=1;
         glRotatef(angle, 1, 1, 0);   
         pglUseProgram(prog);                  
         draw_triangulation(&result, prog, tri);        
