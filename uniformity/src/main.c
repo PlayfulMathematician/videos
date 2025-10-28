@@ -3378,7 +3378,7 @@ int main(int argc, char *argv[])
 
     
 
-    glEnable(0x809D);
+    glEnable(GL_MULTISAMPLE);
     glEnable(GL_DEPTH_TEST);
     SDL_Event e;
     float angle = 0;
